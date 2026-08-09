@@ -54,4 +54,4 @@ npm run dev
 - `/public`: Static assets (images, videos).
 
 ---
-Created with ❤️ by Antigravity AI
+Created with ❤️ by Team AIVA
