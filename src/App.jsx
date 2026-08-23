@@ -5,6 +5,7 @@ import DashboardLayout from './components/DashboardLayout';
 import Dashboard from './components/Dashboard';
 import Upload from './components/Upload';
 import AptitudeTest from './components/AptitudeTest';
+import CodingRound from './components/coding/CodingRound';
 import AIInterview from './components/AIInterview';
 import JobSearchAgent from './components/JobSearchAgent';
 import ApplicationTracker from './components/ApplicationTracker';
@@ -24,7 +25,7 @@ function App() {
           <Route path="job-agent" element={<JobSearchAgent />} />
           <Route path="applications" element={<ApplicationTracker />} />
           <Route path="aptitude" element={<AptitudeTest />} />
-          <Route path="coding" element={<ComingSoon title="Coding Round" />} />
+          <Route path="coding" element={<CodingRound />} />
           <Route path="interview" element={<AIInterview />} />
           <Route path="reports" element={<ComingSoon title="Reports" />} />
           <Route path="settings" element={<ComingSoon title="Settings" />} />

@@ -14,6 +14,8 @@ import hashlib
 import datetime
 import re as stdlib_re
 
+from coding_service import router as coding_router
+
 # Load environment variables from .env file
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -27,6 +29,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Coding Round module (isolated in coding_service.py — see that file for details)
+app.include_router(coding_router)
 
 # ---------- Configure Groq AI (FREE — no billing required) ----------
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")

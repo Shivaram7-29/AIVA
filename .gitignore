@@ -44,3 +44,6 @@ backend/data/applications/
 
 # Test resume
 Naveenresume.pdf
+
+backend/data/coding/progress.json
+backend/data/coding/round.json
