@@ -1,157 +1,188 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Mic, BarChart3, ArrowRight, Sparkles, TrendingUp, Bot, Briefcase } from 'lucide-react';
+import {
+  Mic,
+  Bot,
+  Briefcase,
+  ArrowRight,
+  BookOpen,
+  Clock,
+} from 'lucide-react';
 
-const cards = [
-  {
-    title: 'AI Job Search Agent',
-    description: 'Upload your resume, let AI find matching jobs, and apply with AI-prepared applications. Full pipeline: Resume → Search → Match → Apply.',
-    icon: Bot,
-    link: '/dashboard/job-agent',
-    gradient: 'from-indigo-600 to-blue-600',
-    shadow: 'shadow-indigo-500/20',
-    glow: 'group-hover:shadow-indigo-500/30',
-    iconBg: 'bg-indigo-500/20',
-    badge: 'NEW',
-  },
-  {
-    title: 'Application Tracker',
-    description: 'Track all your job applications, update statuses, and manage your job search pipeline from one dashboard.',
-    icon: Briefcase,
-    link: '/dashboard/applications',
-    gradient: 'from-emerald-600 to-teal-600',
-    shadow: 'shadow-emerald-500/20',
-    glow: 'group-hover:shadow-emerald-500/30',
-    iconBg: 'bg-emerald-500/20',
-    badge: 'NEW',
-  },
-  {
-    title: 'Upload Resume',
-    description: 'Upload your PDF resume and get an AI-powered analysis with score, skill match, and actionable suggestions.',
-    icon: FileText,
-    link: '/dashboard/upload',
-    gradient: 'from-purple-600 to-pink-600',
-    shadow: 'shadow-purple-500/20',
-    glow: 'group-hover:shadow-purple-500/30',
-    iconBg: 'bg-purple-500/20',
-  },
-  {
-    title: 'Start Interview',
-    description: 'Practice with our AI interviewer. Choose HR, Technical, or Coding rounds with real-time feedback.',
-    icon: Mic,
-    link: '/dashboard/interview',
-    gradient: 'from-cyan-600 to-blue-600',
-    shadow: 'shadow-cyan-500/20',
-    glow: 'group-hover:shadow-cyan-500/30',
-    iconBg: 'bg-cyan-500/20',
-  },
-  {
-    title: 'View Reports',
-    description: 'Track your performance over time. View detailed analytics, scores, and improvement recommendations.',
-    icon: BarChart3,
-    link: '/dashboard/reports',
-    gradient: 'from-amber-600 to-orange-600',
-    shadow: 'shadow-amber-500/20',
-    glow: 'group-hover:shadow-amber-500/30',
-    iconBg: 'bg-amber-500/20',
-  },
-];
+
+/* ----------------------------------------------------------------------------
+ * PlacementAI — VEX-style Dashboard
+ * Premium dark workspace. Greeting hero, large stat cards with
+ * restrained typography, "Continue your journey" action cards,
+ * recent activity timeline, single premium CTA.
+ * ------------------------------------------------------------------------- */
 
 const stats = [
-  { label: 'Resumes Analyzed', value: '0', icon: FileText, color: 'text-indigo-400' },
-  { label: 'Interviews Taken', value: '0', icon: Mic, color: 'text-purple-400' },
-  { label: 'Avg Score', value: '--', icon: TrendingUp, color: 'text-cyan-400' },
+  { label: 'Jobs Matched', value: '0', sublabel: 'From last search' },
+  { label: 'Applications', value: '0', sublabel: 'In pipeline' },
+  { label: 'Interview Readiness', value: '—', sublabel: 'Take a mock' },
+  { label: 'Aptitude Score', value: '—', sublabel: 'Take a test' },
 ];
+
+
+const journeyCards = [
+  {
+    title: 'Find Opportunities',
+    description: 'Upload your resume and let AI search real job postings, ranked by match score against your profile.',
+    icon: Bot,
+    link: '/dashboard/job-agent',
+  },
+  {
+    title: 'Track Applications',
+    description: 'Save jobs you\'ve applied to, track status, and manage your placement pipeline in one place.',
+    icon: Briefcase,
+    link: '/dashboard/applications',
+  },
+  {
+    title: 'Prepare for Interview',
+    description: 'Practice with an AI interviewer that speaks questions aloud and scores your answers.',
+    icon: Mic,
+    link: '/dashboard/interview',
+  },
+  {
+    title: 'Practice Aptitude',
+    description: 'Take a campus placement aptitude test in the TCS NQT pattern — 20 MCQs.',
+    icon: BookOpen,
+    link: '/dashboard/aptitude',
+  },
+];
+
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {stats.map((stat, i) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1, duration: 0.4 }}
-            className="bg-white/5 backdrop-blur-lg border border-white/5 rounded-xl p-5 flex items-center gap-4"
-          >
-            <div className={`p-3 rounded-lg bg-white/5`}>
-              <stat.icon className={`w-5 h-5 ${stat.color}`} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-white">{stat.value}</p>
-              <p className="text-sm text-gray-500">{stat.label}</p>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Section Title */}
-      <div className="flex items-center gap-2">
-        <Sparkles className="w-5 h-5 text-indigo-400" />
-        <h3 className="text-xl font-semibold text-white">Quick Actions</h3>
-      </div>
-
-      {/* Action Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {cards.map((card, index) => (
-          <motion.div
-            key={card.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + index * 0.1, duration: 0.5 }}
-            onClick={() => navigate(card.link)}
-            className={`group cursor-pointer bg-white/5 backdrop-blur-lg border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all duration-300 shadow-lg ${card.shadow} ${card.glow} hover:shadow-xl hover:-translate-y-1 relative`}
-          >
-            {/* Badge */}
-            {card.badge && (
-              <span className="absolute top-4 right-4 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/30 text-indigo-300 border border-indigo-500/30">
-                {card.badge}
-              </span>
-            )}
-
-            {/* Icon */}
-            <div className={`w-14 h-14 rounded-xl ${card.iconBg} flex items-center justify-center mb-5`}>
-              <card.icon className="w-7 h-7 text-white" />
-            </div>
-
-            {/* Content */}
-            <h4 className="text-lg font-semibold text-white mb-2">{card.title}</h4>
-            <p className="text-sm text-gray-400 leading-relaxed mb-5">{card.description}</p>
-
-            {/* CTA */}
-            <div className={`inline-flex items-center gap-2 text-sm font-semibold bg-gradient-to-r ${card.gradient} bg-clip-text text-transparent`}>
-              Get Started
-              <ArrowRight className="w-4 h-4 text-white/70 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Motivational Banner */}
+    <div className="max-w-[1100px] mx-auto space-y-10">
+      {/* Greeting Hero */}
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.8 }}
-        className="bg-gradient-to-r from-indigo-600/10 to-cyan-600/10 border border-indigo-500/10 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-4"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="animate-page-enter"
       >
-        <div className="flex-1">
-          <h4 className="text-lg font-semibold text-white mb-1">🎯 Pro Tip</h4>
-          <p className="text-sm text-gray-400">
-            Start by using the AI Job Search Agent — upload your resume and let AI find, match, and help you apply 
-            to the best jobs automatically. Your entire job search, powered by AI.
+        <span className="kicker">PlacementAI</span>
+        <h1 className="text-[32px] md:text-[44px] font-normal tracking-[-0.03em] text-white mt-2 leading-tight">
+          {greeting}, Shiva.
+        </h1>
+        <p className="text-[15px] text-white/40 mt-2 max-w-[560px]">
+          Your placement journey, at a glance.
+        </p>
+      </motion.div>
+
+      {/* Stats — clean dark cards, large typography, small labels */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.05 }}
+        className="grid grid-cols-2 md:grid-cols-4 gap-3"
+      >
+        {stats.map((s) => (
+          <div key={s.label} className="vex-card p-5">
+            <p className="text-[32px] font-normal tracking-tight text-white leading-none">
+              {s.value}
+            </p>
+            <p className="text-[12px] text-white/50 mt-2">{s.label}</p>
+            <p className="text-[11px] text-white/30 mt-0.5">{s.sublabel}</p>
+          </div>
+        ))}
+      </motion.div>
+
+      {/* Continue your journey */}
+      <div>
+        <h2 className="text-[18px] font-medium tracking-tight text-white mb-4">
+          Continue your journey
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {journeyCards.map((c, i) => (
+            <motion.button
+              key={c.title}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 + i * 0.05 }}
+              onClick={() => navigate(c.link)}
+              className="group text-left vex-card p-6"
+            >
+              <div className="flex items-start gap-4">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+                  style={{ background: 'rgba(255, 255, 255, 0.06)' }}
+                >
+                  <c.icon className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" strokeWidth={1.5} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-[15px] font-medium text-white tracking-tight">
+                    {c.title}
+                  </h3>
+                  <p className="text-[13px] text-white/40 mt-1 leading-relaxed">
+                    {c.description}
+                  </p>
+                </div>
+                <ArrowRight
+                  className="w-4 h-4 text-white/30 group-hover:text-white/70 group-hover:translate-x-0.5 transition-all flex-shrink-0 mt-1"
+                  strokeWidth={1.5}
+                />
+              </div>
+            </motion.button>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent Activity */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[18px] font-medium tracking-tight text-white">
+            Recent activity
+          </h2>
+          <Clock className="w-4 h-4 text-white/30" strokeWidth={1.5} />
+        </div>
+        <div className="vex-card p-10 text-center">
+          <div
+            className="w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-4"
+            style={{ background: 'rgba(255, 255, 255, 0.04)' }}
+          >
+            <Clock className="w-5 h-5 text-white/30" strokeWidth={1.5} />
+          </div>
+          <p className="text-[14px] font-medium text-white">No recent activity yet</p>
+          <p className="text-[13px] text-white/40 mt-1.5 max-w-md mx-auto">
+            Your placements journey will appear here as you use the platform.
           </p>
         </div>
-        <button
-          onClick={() => navigate('/dashboard/job-agent')}
-          className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-all whitespace-nowrap shadow-lg shadow-indigo-500/20"
-        >
-          Start Job Search →
-        </button>
+      </div>
+
+      {/* Recommended next step — single premium CTA */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.15 }}
+        className="liquid-glass rounded-2xl p-7 md:p-8"
+      >
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+          <div className="flex-1">
+            <span className="kicker">Recommended</span>
+            <h3 className="text-[22px] md:text-[26px] font-normal tracking-[-0.02em] text-white mt-2 leading-snug">
+              Start with the AI Job Search Agent.
+            </h3>
+            <p className="text-[14px] text-white/50 mt-2 max-w-[520px] leading-relaxed">
+              Upload your resume, let AI find matching jobs, and apply with
+              AI-prepared applications. Your entire placement workflow, powered by AI.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/dashboard/job-agent')}
+            className="vex-btn-primary inline-flex items-center gap-2 flex-shrink-0"
+          >
+            Start now
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
       </motion.div>
     </div>
   );

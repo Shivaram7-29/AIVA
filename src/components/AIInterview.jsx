@@ -1,115 +1,111 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import {
-  Mic,
-  MicOff,
-  Send,
-  Loader2,
-  Sparkles,
-  CheckCircle2,
-  XCircle,
-  Lightbulb,
-  RotateCcw,
-  Award,
-  TrendingUp,
-  TrendingDown,
-  Users,
-  BrainCircuit,
-  Code,
-  Target,
-  Volume2,
-  VolumeX,
-  Phone,
-  PhoneOff,
-  Video,
-  Monitor,
-  Maximize2,
-  Minimize2,
+  Mic, MicOff, Send, Loader2, Sparkles, CheckCircle2, XCircle, Lightbulb,
+  RotateCcw, Award, TrendingUp, TrendingDown, Users, BrainCircuit, Code,
+  Volume2, VolumeX, PhoneOff, Video, Maximize2, Minimize2,
 } from 'lucide-react';
-
-
-import InteractiveAvatar from './InteractiveAvatar';
+import { PageHeader, ScoreRing } from './ui';
+import { extractError } from '../lib/api';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const TOTAL_QUESTIONS = 8;
+const PROFILE_STORAGE_KEY = 'placementai_candidate_profile';
+
+const readCandidateProfile = () => {
+  try {
+    const stored = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    const profile = stored ? JSON.parse(stored) : {};
+    return profile && typeof profile === 'object' && !Array.isArray(profile) ? profile : {};
+  } catch {
+    return {};
+  }
+};
+
+const FLOW = Object.freeze({
+  QUESTION_SPEAKING: 'QUESTION_SPEAKING',
+  WAITING_FOR_ANSWER: 'WAITING_FOR_ANSWER',
+  ANSWER_SUBMITTED: 'ANSWER_SUBMITTED',
+  EVALUATING: 'EVALUATING',
+  FEEDBACK_DISPLAYED: 'FEEDBACK_DISPLAYED',
+  BETTER_ANSWER_SPEAKING: 'BETTER_ANSWER_SPEAKING',
+  SHORT_PAUSE: 'SHORT_PAUSE',
+  NEXT_QUESTION_GENERATION: 'NEXT_QUESTION_GENERATION',
+});
 
 const interviewTypes = [
-  { id: 'HR', label: 'HR Round', icon: Users, color: 'from-pink-500 to-rose-600', desc: 'Behavioral & soft skills', tag: 'Round 1' },
-  { id: 'Technical', label: 'Technical', icon: BrainCircuit, color: 'from-indigo-500 to-blue-600', desc: 'Core CS concepts', tag: 'Round 2' },
-  { id: 'Coding', label: 'Coding', icon: Code, color: 'from-emerald-500 to-teal-600', desc: 'Problem solving & DSA', tag: 'Round 3' },
+  { id: 'HR', label: 'HR Round', icon: Users, desc: 'Behavioral & soft skills', tag: 'Round 1' },
+  { id: 'Technical', label: 'Technical', icon: BrainCircuit, desc: 'Core CS concepts', tag: 'Round 2' },
+  { id: 'Coding', label: 'Coding', icon: Code, desc: 'Problem solving & DSA', tag: 'Round 3' },
+];
+
+const interviewers = [
+  { id: 'male', label: 'Male', name: 'Arjun Mehta', title: 'Senior Interviewer' },
 ];
 
 
-// ============================================================
-//  SCORE BAR
-// ============================================================
-const ScoreBar = ({ score, max = 10 }) => {
-  const pct = (score / max) * 100;
-  const color = score >= 8 ? 'bg-green-500' : score >= 5 ? 'bg-yellow-500' : 'bg-red-500';
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-        <motion.div className={`h-full rounded-full ${color}`}
-          initial={{ width: 0 }} animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
-        />
-      </div>
-      <span className={`text-sm font-bold ${score >= 8 ? 'text-green-400' : score >= 5 ? 'text-yellow-400' : 'text-red-400'}`}>
-        {score}/{max}
-      </span>
+const ScoreBar = ({ score, max = 10 }) => (
+  <div className="flex items-center gap-3">
+    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+      <Motion.div
+        className="h-full rounded-full bg-white"
+        initial={{ width: 0 }}
+        animate={{ width: `${(Number(score) / max) * 100}%` }}
+        transition={{ duration: 0.7, ease: 'easeOut' }}
+      />
     </div>
-  );
-};
+    <span className="text-[12px] font-medium text-white/70">{score}/{max}</span>
+  </div>
+);
 
-// ============================================================
-//  TEXT-TO-SPEECH HOOK
-// ============================================================
 const useSpeech = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const utteranceRef = useRef(null);
+  const speechIdRef = useRef(0);
+  const completionRef = useRef(null);
 
-  const speak = useCallback((text) => {
-    if (!voiceEnabled || !window.speechSynthesis) return;
+  const speak = useCallback((text, onComplete) => {
+    const speechId = speechIdRef.current + 1;
+    speechIdRef.current = speechId;
+    completionRef.current = onComplete;
+    const complete = () => {
+      if (speechIdRef.current !== speechId) return;
+      completionRef.current = null;
+      setIsSpeaking(false);
+      onComplete?.();
+    };
+    if (!voiceEnabled || typeof window === 'undefined' || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
+      complete();
+      return;
+    }
     window.speechSynthesis.cancel();
-
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;   // Professional rate
-    utterance.pitch = 1.0; // Natural pitch for male voice
-
-    // Pick a professional male English voice
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
     const voices = window.speechSynthesis.getVoices();
-
-    // Priority order: known deep male voices
-    const maleNames = ['Microsoft Mark', 'Microsoft David', 'Google UK English Male', 'Daniel', 'James', 'David', 'Mark', 'Alex'];
-    const preferred =
-      voices.find(v => maleNames.some(n => v.name.includes(n)) && v.lang.startsWith('en')) ||
-      voices.find(v => v.name.toLowerCase().includes('male') && v.lang.startsWith('en')) ||
-      voices.find(v => v.lang.startsWith('en') && !v.name.toLowerCase().includes('female')) ||
-      voices.find(v => v.lang.startsWith('en'));
-
+    const preferred = voices.find((voice) => voice.lang.startsWith('en')) || voices[0];
     if (preferred) utterance.voice = preferred;
-
     utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    utteranceRef.current = utterance;
+    utterance.onend = complete;
+    utterance.onerror = complete;
     window.speechSynthesis.speak(utterance);
   }, [voiceEnabled]);
 
-  const stop = useCallback(() => {
-    window.speechSynthesis.cancel();
+  const stop = useCallback(({ complete = false } = {}) => {
+    const pendingCompletion = completionRef.current;
+    completionRef.current = null;
+    speechIdRef.current += 1;
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
     setIsSpeaking(false);
+    if (complete) pendingCompletion?.();
   }, []);
 
   const toggleVoice = () => {
-    if (voiceEnabled) stop();
-    setVoiceEnabled(v => !v);
+    if (voiceEnabled) stop({ complete: true });
+    setVoiceEnabled((enabled) => !enabled);
   };
 
   useEffect(() => {
-    // Preload voices
     window.speechSynthesis?.getVoices();
     return () => window.speechSynthesis?.cancel();
   }, []);
@@ -117,9 +113,7 @@ const useSpeech = () => {
   return { speak, stop, isSpeaking, voiceEnabled, toggleVoice };
 };
 
-// ============================================================
-//  SPEECH RECOGNITION HOOK
-// ============================================================
+
 const useSpeechRecognition = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -127,27 +121,24 @@ const useSpeechRecognition = () => {
 
   const startListening = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-
+    if (!SpeechRecognition) return false;
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
-
     recognition.onresult = (event) => {
-      let t = '';
-      for (let i = 0; i < event.results.length; i++) {
-        t += event.results[i][0].transcript;
+      let text = '';
+      for (let index = 0; index < event.results.length; index += 1) {
+        text += event.results[index][0].transcript;
       }
-      setTranscript(t);
+      setTranscript(text);
     };
-
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
     recognition.onerror = () => setIsListening(false);
-
     recognitionRef.current = recognition;
     recognition.start();
+    return true;
   }, []);
 
   const stopListening = useCallback(() => {
@@ -155,55 +146,346 @@ const useSpeechRecognition = () => {
     setIsListening(false);
   }, []);
 
-  const resetTranscript = () => setTranscript('');
-
-  return { isListening, transcript, startListening, stopListening, resetTranscript, setTranscript };
+  return { isListening, transcript, startListening, stopListening, setTranscript };
 };
 
-// ============================================================
-//  MAIN AI INTERVIEW COMPONENT
-// ============================================================
+const FeedbackCard = ({ feedback }) => {
+  if (!feedback) return null;
+  return (
+    <div className="liquid-glass rounded-xl p-4 space-y-3 overflow-y-auto dark-scroll">
+      <p className="text-[11px] font-medium text-white/60 flex items-center gap-1">
+        <Sparkles className="w-3 h-3" strokeWidth={2} /> AI evaluation
+      </p>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] px-2.5 py-1 rounded-lg font-medium text-white/80" style={{ background: 'rgba(255,255,255,0.1)' }}>
+          {feedback.verdict}
+        </span>
+        <span className="text-[13px] font-medium text-white">{feedback.score}/10</span>
+      </div>
+      <ScoreBar score={feedback.score} />
+      <div className="flex items-center gap-2 text-[11px] text-white/60">
+        {feedback.acceptable
+          ? <CheckCircle2 className="w-3.5 h-3.5 text-white/80" />
+          : <XCircle className="w-3.5 h-3.5 text-white/60" />}
+        {feedback.acceptable ? 'Answer is acceptable' : 'Answer needs more development'}
+      </div>
+      {feedback.strengths?.length > 0 && (
+        <div>
+          <p className="text-[11px] font-medium text-white/60 flex items-center gap-1 mb-1">
+            <TrendingUp className="w-3 h-3" strokeWidth={2} /> Good
+          </p>
+          {feedback.strengths.map((strength, index) => (
+            <p key={index} className="text-[11px] text-white/60 flex gap-1.5 mb-0.5">
+              <CheckCircle2 className="w-3 h-3 text-white/70 mt-0.5 flex-shrink-0" strokeWidth={2} />{strength}
+            </p>
+          ))}
+        </div>
+      )}
+      {feedback.weaknesses?.length > 0 && (
+        <div>
+          <p className="text-[11px] font-medium text-white/60 flex items-center gap-1 mb-1">
+            <TrendingDown className="w-3 h-3" strokeWidth={2} /> Improve
+          </p>
+          {feedback.weaknesses.map((weakness, index) => (
+            <p key={index} className="text-[11px] text-white/60 flex gap-1.5 mb-0.5">
+              <XCircle className="w-3 h-3 text-white/50 mt-0.5 flex-shrink-0" strokeWidth={2} />{weakness}
+            </p>
+          ))}
+        </div>
+      )}
+      {feedback.better_answer && (
+        <div className="rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.06)' }}>
+          <p className="text-[11px] font-medium text-white/70 flex items-center gap-1 mb-1">
+            <Lightbulb className="w-3 h-3" strokeWidth={2} /> Better way to answer
+          </p>
+          <p className="text-[11px] text-white/70 leading-relaxed">{feedback.better_answer}</p>
+        </div>
+      )}
+      {feedback.actionable_feedback && (
+        <p className="text-[11px] text-white/50 leading-relaxed">
+          <span className="text-white/70 font-medium">Next time: </span>{feedback.actionable_feedback}
+        </p>
+      )}
+    </div>
+  );
+};
+
 const AIInterview = () => {
-  const navigate = useNavigate();
   const [stage, setStage] = useState('setup');
+  const [flowState, setFlowState] = useState(FLOW.QUESTION_SPEAKING);
   const [role, setRole] = useState('Software Engineer');
   const [type, setType] = useState('Technical');
+  const [interviewer, setInterviewer] = useState('male');
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [questionCount, setQuestionCount] = useState(0);
   const [scores, setScores] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isThinking, setIsThinking] = useState(false);
-  const [showFeedback, setShowFeedback] = useState(null);
+  const [feedback, setFeedback] = useState(null);
   const [userInput, setUserInput] = useState('');
-  const [connectionAnim, setConnectionAnim] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorState, setErrorState] = useState(null);
+  const [completed, setCompleted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [resumeProfile] = useState(readCandidateProfile);
   const fsContainerRef = useRef(null);
+  const advancingRef = useRef(false);
+  const pauseTimerRef = useRef(null);
+  const pendingFeedbackSpeechRef = useRef(null);
 
-  // ── Fullscreen helpers ─────────────────────────────────
-  const enterFullscreen = useCallback(() => {
-    const el = document.documentElement;
-    if (el.requestFullscreen) el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-  }, []);
+  const { speak, stop, isSpeaking, voiceEnabled, toggleVoice } = useSpeech();
 
-  const exitFullscreen = useCallback(() => {
-    if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
-    else if (document.webkitExitFullscreen && document.webkitFullscreenElement) document.webkitExitFullscreen();
-  }, []);
 
-  // Track native fullscreen changes (e.g. user presses ESC)
+  const { isListening, transcript, startListening, stopListening, setTranscript } = useSpeechRecognition();
+
   useEffect(() => {
-    const handler = () => {
-      const inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
-      setIsFullscreen(inFs);
-    };
+    if (transcript) setUserInput(transcript);
+  }, [transcript]);
+
+  useEffect(() => () => {
+    if (pauseTimerRef.current) window.clearTimeout(pauseTimerRef.current);
+  }, []);
+
+  const showError = useCallback((message, title) => {
+    setErrorState({ message, title });
+    setIsLoading(false);
+  }, []);
+
+  const apiError = useCallback((err, fallback) => (
+    err.message === 'Failed to fetch' ? fallback : err.message
+  ), []);
+
+  const finishInterview = useCallback(() => {
+    if (pauseTimerRef.current) window.clearTimeout(pauseTimerRef.current);
+    pauseTimerRef.current = null;
+    advancingRef.current = false;
+    setCompleted(true);
+    setStage('finished');
+  }, []);
+
+  const generateNextQuestion = useCallback(async ({ question, answer, evaluation, history, questionNumber, currentDifficulty }) => {
+    setFlowState(FLOW.NEXT_QUESTION_GENERATION);
+    setIsLoading(true);
+    setErrorState(null);
+    try {
+      const response = await fetch(`${API_URL}/interview/next`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role,
+          interview_type: type,
+          question_number: questionNumber,
+          current_question: question,
+          current_answer: answer,
+          current_feedback: evaluation,
+          current_difficulty: currentDifficulty || 'Easy',
+          history: history.map((item) => ({
+            question: item.question,
+            answer: item.answer,
+            score: item.score,
+          })),
+          candidate_profile: resumeProfile,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(extractError(data));
+      if (!data.question) throw new Error('The AI did not return the next question. Please try again.');
+      setCurrentQuestion(data);
+      setQuestionCount(Number(data.question_number) || questionNumber + 1);
+      setUserInput('');
+      setTranscript('');
+      setFeedback(null);
+      setFlowState(FLOW.QUESTION_SPEAKING);
+      speak(data.question, () => setFlowState(FLOW.WAITING_FOR_ANSWER));
+    } catch (err) {
+      advancingRef.current = false;
+      setFlowState(FLOW.FEEDBACK_DISPLAYED);
+      showError(apiError(err, 'The next question could not be loaded. Your evaluation is preserved.'), 'Could not load next question');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [apiError, resumeProfile, role, setTranscript, showError, speak, type]);
+
+  useEffect(() => {
+    if (flowState !== FLOW.FEEDBACK_DISPLAYED || !pendingFeedbackSpeechRef.current) return;
+    const pending = pendingFeedbackSpeechRef.current;
+    pendingFeedbackSpeechRef.current = null;
+    setFlowState(FLOW.BETTER_ANSWER_SPEAKING);
+    speak(pending.text, () => {
+      if (advancingRef.current) return;
+      advancingRef.current = true;
+      setFlowState(FLOW.SHORT_PAUSE);
+      if (pauseTimerRef.current) window.clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = window.setTimeout(() => {
+        pauseTimerRef.current = null;
+        if (pending.record.questionNumber >= TOTAL_QUESTIONS) {
+          finishInterview();
+          return;
+        }
+        speak("Alright, let's move on.", () => {
+          generateNextQuestion({
+            question: pending.record.question,
+            answer: pending.record.answer,
+            evaluation: pending.feedback,
+            history: pending.history,
+            questionNumber: pending.record.questionNumber,
+            currentDifficulty: pending.currentDifficulty,
+          });
+        });
+      }, 800);
+    });
+  }, [flowState, speak, finishInterview, generateNextQuestion]);
+
+  const startInterview = async () => {
+    setIsLoading(true);
+    setErrorState(null);
+    try {
+      const response = await fetch(`${API_URL}/interview/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, interview_type: type, candidate_profile: resumeProfile }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(extractError(data));
+      if (!data.question) throw new Error('The AI did not return a question. Please try again.');
+      setCurrentQuestion(data);
+      setQuestionCount(Number(data.question_number) || 1);
+      setScores([]);
+      setFeedbacks([]);
+      setFeedback(null);
+      setUserInput('');
+      setCompleted(false);
+      advancingRef.current = false;
+      setFlowState(FLOW.QUESTION_SPEAKING);
+      setStage('interview');
+      speak(data.question, () => setFlowState(FLOW.WAITING_FOR_ANSWER));
+    } catch (err) {
+      showError(apiError(err, 'Cannot connect to the interview backend. Make sure FastAPI is running.'), 'Could not start interview');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
+
+
+  const submitAnswer = async () => {
+    const answer = userInput.trim();
+    if (!answer || isLoading || flowState !== FLOW.WAITING_FOR_ANSWER || !currentQuestion) return;
+    if (isListening) stopListening();
+    stop();
+    setErrorState(null);
+    setFlowState(FLOW.ANSWER_SUBMITTED);
+    setFlowState(FLOW.EVALUATING);
+    setIsLoading(true);
+
+    try {
+      const history = feedbacks.map((item) => ({
+        question: item.question,
+        answer: item.answer,
+        score: item.score,
+      }));
+      const payload = {
+        role,
+        interview_type: type,
+        question: currentQuestion.question,
+        answer,
+        question_number: currentQuestion.question_number || questionCount,
+        history,
+        candidate_profile: resumeProfile,
+      };
+      const response = await fetch(`${API_URL}/interview/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(extractError(data));
+      if (!data.feedback) throw new Error('The AI did not return an evaluation. Please try again.');
+
+      const nextFeedback = data.feedback;
+      const completedRecord = { ...nextFeedback, question: currentQuestion.question, answer };
+      setFeedback(nextFeedback);
+      setScores((previous) => [...previous, Number(nextFeedback.score) || 0]);
+      setFeedbacks((previous) => [...previous, completedRecord]);
+      setFlowState(FLOW.FEEDBACK_DISPLAYED);
+
+      const feedbackText = [
+        `You scored ${nextFeedback.score} out of 10. ${nextFeedback.verdict}.`,
+        nextFeedback.strengths?.length ? `What you did well: ${nextFeedback.strengths.join('. ')}.` : '',
+        nextFeedback.weaknesses?.length ? `What to improve: ${nextFeedback.weaknesses.join('. ')}.` : '',
+        nextFeedback.better_answer ? `A stronger answer would be: ${nextFeedback.better_answer}` : '',
+      ].filter(Boolean).join(' ');
+      const recordForHistory = {
+        ...completedRecord,
+        questionNumber: Number(currentQuestion.question_number) || questionCount,
+      };
+      pendingFeedbackSpeechRef.current = {
+        text: feedbackText || 'Your answer has been evaluated.',
+        record: recordForHistory,
+        feedback: nextFeedback,
+        history: [...feedbacks, recordForHistory],
+        currentDifficulty: currentQuestion.difficulty || 'Easy',
+      };
+    } catch (err) {
+      setFlowState(FLOW.WAITING_FOR_ANSWER);
+      showError(apiError(err, 'The evaluation could not be completed. Your answer is still here—please retry.'), 'Could not evaluate answer');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleMic = () => {
+    if (flowState !== FLOW.WAITING_FOR_ANSWER || isLoading) return;
+    if (isListening) stopListening();
+    else {
+      setTranscript('');
+      if (!startListening()) {
+        showError('Speech recognition is not available in this browser. You can type your answer instead.', 'Voice input unavailable');
+      }
+    }
+  };
+
+  const endInterview = () => {
+    stop();
+    if (isListening) stopListening();
+    if (pauseTimerRef.current) window.clearTimeout(pauseTimerRef.current);
+    pauseTimerRef.current = null;
+    advancingRef.current = false;
+    setCompleted(false);
+    setStage('finished');
+  };
+
+  const resetInterview = () => {
+    stop();
+    if (isListening) stopListening();
+    if (pauseTimerRef.current) window.clearTimeout(pauseTimerRef.current);
+    pauseTimerRef.current = null;
+    advancingRef.current = false;
+    setStage('setup');
+    setFlowState(FLOW.QUESTION_SPEAKING);
+    setCurrentQuestion(null);
+    setQuestionCount(0);
+    setScores([]);
+    setFeedbacks([]);
+    setFeedback(null);
+    setUserInput('');
+    setCompleted(false);
+    setErrorState(null);
+  };
+
+  const enterFullscreen = () => {
+    const element = fsContainerRef.current;
+    if (element?.requestFullscreen) element.requestFullscreen();
+  };
+
+  const exitFullscreen = () => {
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+  };
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener('fullscreenchange', handler);
-    document.addEventListener('webkitfullscreenchange', handler);
-    return () => {
-      document.removeEventListener('fullscreenchange', handler);
-      document.removeEventListener('webkitfullscreenchange', handler);
-    };
+    return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
   const toggleFullscreen = () => {
@@ -211,524 +493,210 @@ const AIInterview = () => {
     else enterFullscreen();
   };
 
-  const { speak, stop, isSpeaking, voiceEnabled, toggleVoice } = useSpeech();
-  const { isListening, transcript, startListening, stopListening, resetTranscript, setTranscript } = useSpeechRecognition();
+  const avgScore = scores.length
+    ? (scores.reduce((total, score) => total + score, 0) / scores.length).toFixed(1)
+    : '0.0';
+  const selectedInterviewer = interviewers.find((item) => item.id === interviewer) || interviewers[0];
+  const hasResumeProfile = Object.entries(resumeProfile).some(([key, value]) => (
+    key !== 'name' && ((Array.isArray(value) && value.length > 0) || (typeof value === 'string' && value.trim() && value !== 'Not specified'))
+  ));
 
-  // Sync transcript to input
-  useEffect(() => {
-    if (transcript) setUserInput(transcript);
-  }, [transcript]);
-
-  // Start interview — load first question
-  const startInterview = async () => {
-    setIsLoading(true);
-    setConnectionAnim(true);
-    try {
-      const res = await fetch(`${API_URL}/interview/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, interview_type: type })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail);
-      setCurrentQuestion(data);
-      setQuestionCount(1);
-      setScores([]);
-      setFeedbacks([]);
-      setShowFeedback(null);
-      setConnectionAnim(false);
-      setStage('interview');
-      speak(data.question);
-    } catch (err) {
-      setConnectionAnim(false);
-      // error recovery
-      alert('Error: ' + err.message);
-    } finally { setIsLoading(false); }
-  };
-
-  // Submit answer
-  const submitAnswer = async () => {
-    const answer = userInput.trim();
-    if (!answer || isLoading) return;
-    if (isListening) stopListening();
-    stop();
-    setUserInput('');
-    resetTranscript();
-    setIsLoading(true);
-    setShowFeedback(null);
-
-    try {
-      // Prepare history to send
-      const history = feedbacks.map(item => ({
-        question: item.question,
-        answer: item.answer
-      }));
-
-      const payload = {
-        role,
-        interview_type: type,
-        question: currentQuestion.question,
-        answer,
-        question_number: currentQuestion.question_number || questionCount,
-        history
-      };
-
-      const res = await fetch(`${API_URL}/interview/answer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail);
-
-      setScores(prev => [...prev, data.feedback.score]);
-      setFeedbacks(prev => [...prev, { ...data.feedback, question: currentQuestion.question, answer }]);
-      setShowFeedback(data.feedback);
-
-      // Human-like pause before giving feedback
-      setIsThinking(true);
-      await new Promise(r => setTimeout(r, 1200 + Math.random() * 800));
-      setIsThinking(false);
-
-      // Build full spoken feedback:
-      // Score → Verdict → What you did well → Improvements → Model Answer
-      const weaknessPart = data.feedback.weaknesses?.length
-        ? `Here is what you can improve: ${data.feedback.weaknesses.join('. ')}.`
-        : '';
-      const strengthPart = data.feedback.strengths?.length
-        ? `What you did well: ${data.feedback.strengths.join('. ')}.`
-        : '';
-      const modelAnswerPart = data.feedback.better_answer
-        ? `Here is a stronger answer you should remember: ${data.feedback.better_answer}`
-        : '';
-
-      const feedbackText = [
-        `You scored ${data.feedback.score} out of 10. ${data.feedback.verdict}.`,
-        strengthPart,
-        weaknessPart,
-        modelAnswerPart,
-      ].filter(Boolean).join(' ');
-
-      speak(feedbackText);
-
-      // Estimate how long the speech will take (~130 words per minute)
-      const wordCount = feedbackText.split(/\s+/).length;
-      const speechDurationMs = Math.max(6000, (wordCount / 130) * 60 * 1000);
-
-      if (questionCount >= 5) {
-        setTimeout(() => setStage('finished'), speechDurationMs + 2000);
-      } else {
-        // Wait for speech to finish, then think, then ask next question
-        setTimeout(() => {
-          setShowFeedback(null);
-          setIsThinking(true);
-          setTimeout(() => {
-            setIsThinking(false);
-            setCurrentQuestion(data.next_question);
-            setQuestionCount(c => c + 1);
-            speak(data.next_question.question);
-          }, 1500 + Math.random() * 1000);
-        }, speechDurationMs + 1000);
-      }
-    } catch (err) {
-      alert('Error: ' + err.message);
-    } finally { setIsLoading(false); }
-  };
-
-  const toggleMic = () => {
-    if (isListening) { stopListening(); }
-    else { resetTranscript(); startListening(); }
-  };
-
-  const endInterview = () => { stop(); if (isListening) stopListening(); setStage('finished'); };
-  const resetInterview = () => { stop(); setStage('setup'); setCurrentQuestion(null); setQuestionCount(0); setScores([]); setFeedbacks([]); setShowFeedback(null); setUserInput(''); };
-  const avgScore = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
-
-  // ============ SETUP ============
   if (stage === 'setup') {
     return (
-      <div className="max-w-4xl mx-auto space-y-8">
-        {/* Hero */}
-        <div className="relative bg-gradient-to-br from-indigo-900/30 to-purple-900/20 border border-white/10 rounded-2xl overflow-hidden">
-          <div className="flex flex-col md:flex-row items-center gap-6 p-8">
-            <div className="w-40 h-40 md:w-48 md:h-48 rounded-2xl overflow-hidden flex-shrink-0 border-2 border-indigo-500/30 shadow-[0_0_30px_rgba(79,70,229,0.2)]">
-              <img src="/ai-interviewer.png" alt="AI Interviewer" className="w-full h-full object-cover" />
+      <div className="max-w-[860px] mx-auto space-y-6">
+        {errorState && (
+          <div className="rounded-xl p-4 flex items-start gap-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <XCircle className="w-4 h-4 text-white/70 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-[13px] font-medium text-white">{errorState.title}</p>
+              <p className="text-[12px] text-white/50 mt-0.5">{errorState.message}</p>
+            </div>
+            <button onClick={() => setErrorState(null)} className="text-white/40 hover:text-white"><XCircle className="w-4 h-4" /></button>
+          </div>
+        )}
+
+        <PageHeader kicker="AI Interview" title="Practice like the real thing." subtitle="A live-style interview where the interviewer controls the conversation." />
+
+        <div className="liquid-glass rounded-2xl overflow-hidden">
+          <div className="flex flex-col md:flex-row items-center gap-6 p-7 md:p-8">
+            <div className="w-36 h-36 md:w-40 md:h-40 rounded-2xl overflow-hidden flex-shrink-0" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+              <img src={interviewer === 'female' ? '/interviewer-listening.png' : '/ai-interviewer.png'} alt={`${selectedInterviewer.name} interviewer`} className="w-full h-full object-cover" />
             </div>
             <div className="flex-1 text-center md:text-left">
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2 justify-center md:justify-start">
-                <Mic className="w-6 h-6 text-indigo-400" /> AI Mock Interview
-              </h2>
-              <p className="text-gray-400 mt-2 leading-relaxed">
-                Face-to-face with our AI interviewer. It <strong className="text-indigo-400">speaks questions aloud</strong> and you can
-                reply by <strong className="text-green-400">voice or text</strong>. Real interview experience!
-              </p>
-              <div className="flex gap-3 mt-4 justify-center md:justify-start">
-                <span className="text-xs px-3 py-1.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">🎙️ Voice Input</span>
-                <span className="text-xs px-3 py-1.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">🔊 AI Speaks</span>
-                <span className="text-xs px-3 py-1.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">📊 Live Score</span>
+              <div className="flex gap-2 justify-center md:justify-start flex-wrap">
+                <span className="text-[11px] px-3 py-1 rounded-lg text-white/80" style={{ background: 'rgba(255,255,255,0.08)' }}>Voice Input</span>
+                <span className="text-[11px] px-3 py-1 rounded-lg text-white/80" style={{ background: 'rgba(255,255,255,0.08)' }}>AI Speaks</span>
+                <span className="text-[11px] px-3 py-1 rounded-lg text-white/80" style={{ background: 'rgba(255,255,255,0.08)' }}>Answer Feedback</span>
+                <span className="text-[11px] px-3 py-1 rounded-lg text-white/80" style={{ background: hasResumeProfile ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)' }}>{hasResumeProfile ? 'Resume Context Ready' : 'Role-Based Interview'}</span>
               </div>
+              <h3 className="text-[20px] font-normal tracking-tight text-white mt-4">{selectedInterviewer.name} — {selectedInterviewer.title}</h3>
+              <p className="text-[14px] text-white/50 mt-2 leading-relaxed">The interviewer asks one question, waits for your answer, gives practical feedback, and continues naturally.</p>
             </div>
           </div>
         </div>
 
-        {/* Role */}
         <div>
-          <label className="block text-sm font-medium text-gray-400 mb-1.5">Target Role</label>
-          <input type="text" value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Software Engineer..."
-            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all" />
-          <div className="flex flex-wrap gap-2 mt-2">
-            {['Software Engineer', 'Data Scientist', 'ML Engineer', 'Full Stack Developer', 'Backend Developer'].map(r => (
-              <button key={r} onClick={() => setRole(r)}
-                className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${role === r ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-white/5 text-gray-500 border-white/5 hover:text-gray-300'}`}
-              >{r}</button>
-            ))}
-          </div>
-        </div>
-
-        {/* Type */}
-        <div>
-          <label className="block text-sm font-medium text-gray-400 mb-3">Interview Round</label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {interviewTypes.map(t => (
-              <button key={t.id} onClick={() => setType(t.id)}
-                className={`relative p-5 rounded-xl border text-left transition-all duration-300 ${type === t.id
-                  ? 'border-indigo-500/50 bg-indigo-500/10 scale-[1.02] shadow-[0_0_20px_rgba(79,70,229,0.15)]'
-                  : 'border-white/10 bg-white/5 hover:bg-white/[0.07]'}`}
-              >
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-gray-500 font-medium">{t.tag}</span>
-                <div className={`w-10 h-10 rounded-lg bg-gradient-to-r ${t.color} flex items-center justify-center mt-3 mb-2`}>
-                  <t.icon className="w-5 h-5 text-white" />
-                </div>
-                <p className="text-white font-semibold text-sm">{t.label}</p>
-                <p className="text-gray-500 text-xs mt-1">{t.desc}</p>
-                {type === t.id && (
-                  <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                  </div>
-                )}
+          <label className="block text-[12px] font-medium text-white/40 mb-1.5">Target Role</label>
+          <input type="text" value={role} onChange={(event) => setRole(event.target.value)} placeholder="e.g. Software Engineer..." className="vex-input" />
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
+            {['Software Engineer', 'Data Scientist', 'ML Engineer', 'Full Stack Developer', 'Backend Developer'].map((suggestion) => (
+              <button key={suggestion} onClick={() => setRole(suggestion)} className="text-[12px] px-3 py-1.5 rounded-lg transition-all" style={{ background: role === suggestion ? 'rgba(255,255,255,0.1)' : 'transparent', color: role === suggestion ? '#FFFFFF' : 'rgba(255,255,255,0.5)', border: `1px solid ${role === suggestion ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)'}` }}>
+                {suggestion}
               </button>
             ))}
           </div>
         </div>
 
-        <button onClick={startInterview} disabled={isLoading || !role.trim()}
-          className="w-full py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold text-lg transition-all flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(79,70,229,0.25)] disabled:opacity-70">
-          {isLoading ? <><Loader2 className="w-5 h-5 animate-spin" />Connecting...</> : <><Video className="w-5 h-5" />Join Interview</>}
-        </button>
+        <div>
+          <label className="block text-[12px] font-medium text-white/40 mb-3">Interview Round</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {interviewTypes.map((item) => (
+              <button key={item.id} onClick={() => setType(item.id)} className="relative p-5 rounded-xl text-left transition-all" style={{ border: `1px solid ${type === item.id ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)'}`, background: type === item.id ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.02)' }}>
+                <span className="text-[10px] px-2 py-0.5 rounded-full text-white/50 font-medium" style={{ background: 'rgba(255,255,255,0.06)' }}>{item.tag}</span>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center mt-3 mb-2" style={{ background: 'rgba(255,255,255,0.08)' }}><item.icon className="w-5 h-5 text-white/80" strokeWidth={1.5} /></div>
+                <p className="text-[14px] font-medium text-white tracking-tight">{item.label}</p>
+                <p className="text-[12px] text-white/40 mt-0.5">{item.desc}</p>
+                {type === item.id && <CheckCircle2 className="absolute top-3 right-3 w-5 h-5 text-white" strokeWidth={2} />}
+              </button>
+            ))}
+          </div>
+        </div>
 
-        {/* Connection Animation Overlay */}
-        <AnimatePresence>
-          {connectionAnim && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-[#0B0F19]/95 flex items-center justify-center"
-            >
-              <div className="text-center space-y-6">
-                <motion.div
-                  className="w-24 h-24 mx-auto rounded-full border-4 border-indigo-500/30 border-t-indigo-500 animate-spin"
-                />
-                <div>
-                  <p className="text-white text-lg font-semibold">Connecting to Interview</p>
-                  <p className="text-gray-500 text-sm mt-1">Setting up your session with the AI interviewer…</p>
-                </div>
-                <div className="flex justify-center gap-1">
-                  {[0,1,2].map(i => (
-                    <motion.div key={i} className="w-2 h-2 rounded-full bg-indigo-400"
-                      animate={{ opacity: [0.3, 1, 0.3] }}
-                      transition={{ duration: 1, delay: i * 0.3, repeat: Infinity }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
+
+        <button onClick={startInterview} disabled={isLoading || !role.trim()} className="vex-btn-pill-primary w-full py-3.5 flex items-center justify-center gap-2">
+          {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Connecting…</> : <><Video className="w-4 h-4" strokeWidth={1.5} /> Join Interview</>}
+        </button>
       </div>
     );
   }
 
-  // ============ FINISHED ============
   if (stage === 'finished') {
+    const strongAreas = feedbacks.flatMap((item) => item.strengths || []).slice(0, 3);
+    const improveAreas = feedbacks.flatMap((item) => item.weaknesses || []).slice(0, 3);
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-4 py-6">
-          <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-r from-indigo-500 to-blue-500 flex items-center justify-center">
-            <Award className="w-10 h-10 text-white" />
-          </div>
-          <h2 className="text-2xl font-bold text-white">Interview Complete!</h2>
-          <p className="text-gray-400">{type} Interview · {role}</p>
-        </motion.div>
+      <div className="max-w-[860px] mx-auto space-y-5">
+        <Motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-3 py-6">
+          <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)' }}><Award className="w-8 h-8 text-white" strokeWidth={1.5} /></div>
+          <h2 className="text-[26px] font-normal text-white tracking-tight">{completed ? 'Interview Complete' : 'Interview Ended'}</h2>
+          <p className="text-[14px] text-white/40">{type} Interview · {role}</p>
+      </Motion.div>
 
-        <div className="bg-white/5 border border-white/10 rounded-xl p-6 space-y-4">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2"><Target className="w-5 h-5 text-indigo-400" /> Performance</h3>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-white/5 rounded-xl">
-              <p className="text-3xl font-bold text-indigo-400">{avgScore}</p>
-              <p className="text-xs text-gray-500 mt-1">Avg Score</p>
-            </div>
-            <div className="text-center p-4 bg-white/5 rounded-xl">
-              <p className="text-3xl font-bold text-green-400">{scores.filter(s => s >= 7).length}</p>
-              <p className="text-xs text-gray-500 mt-1">Good Answers</p>
-            </div>
-            <div className="text-center p-4 bg-white/5 rounded-xl">
-              <p className="text-3xl font-bold text-yellow-400">{scores.length}</p>
-              <p className="text-xs text-gray-500 mt-1">Questions</p>
+        <div className="vex-card p-6 space-y-6">
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <ScoreRing value={avgScore} max={10} size={120} label="Overall Score" />
+            <div className="grid grid-cols-2 gap-4 flex-1 w-full">
+              <div className="text-center"><p className="text-[28px] font-normal text-white leading-none">{scores.filter((score) => score >= 7).length}</p><p className="text-[11px] text-white/40 mt-1.5">Good Answers</p></div>
+              <div className="text-center"><p className="text-[28px] font-normal text-white leading-none">{scores.filter((score) => score >= 8).length}</p><p className="text-[11px] text-white/40 mt-1.5">Strong Answers</p></div>
+              <div className="text-center"><p className="text-[28px] font-normal text-white leading-none">{scores.length}</p><p className="text-[11px] text-white/40 mt-1.5">Questions</p></div>
+              <div className="text-center"><p className="text-[28px] font-normal text-white leading-none">{avgScore}</p><p className="text-[11px] text-white/40 mt-1.5">Average</p></div>
             </div>
           </div>
-          {scores.map((s, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 w-8">Q{i + 1}</span>
-              <ScoreBar score={s} />
+          {(strongAreas.length > 0 || improveAreas.length > 0) && (
+            <div className="grid md:grid-cols-2 gap-4 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div><p className="text-[11px] uppercase tracking-wider text-white/40 mb-2">Strongest areas</p>{strongAreas.map((item, index) => <p key={index} className="text-[12px] text-white/60 mb-1">• {item}</p>)}</div>
+              <div><p className="text-[11px] uppercase tracking-wider text-white/40 mb-2">Recommended preparation</p>{improveAreas.map((item, index) => <p key={index} className="text-[12px] text-white/60 mb-1">• {item}</p>)}</div>
             </div>
-          ))}
+          )}
+          <div className="space-y-2 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <p className="text-[12px] font-medium text-white/40 uppercase tracking-wider mb-2">Question by question</p>
+            {scores.map((score, index) => <div key={index} className="flex items-center gap-3"><span className="text-[11px] text-white/40 w-6">Q{index + 1}</span><ScoreBar score={score} /></div>)}
+          </div>
         </div>
 
-        {/* Detailed Review */}
-        <details className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-          <summary className="px-5 py-4 text-sm font-semibold text-gray-400 cursor-pointer hover:text-white transition-colors">
-            Review All Answers ({feedbacks.length} questions)
-          </summary>
-          <div className="px-5 pb-5 space-y-4 max-h-[500px] overflow-y-auto">
-            {feedbacks.map((fb, i) => (
-              <div key={i} className="bg-white/[0.03] border border-white/10 rounded-xl p-4 space-y-2">
-                <p className="text-sm text-gray-200"><span className="text-indigo-400 font-semibold">Q{i + 1}:</span> {fb.question}</p>
-                <p className="text-xs text-gray-400"><span className="text-gray-500">Your answer:</span> {fb.answer}</p>
-                <div className="flex items-center gap-2">
-                  <ScoreBar score={fb.score} />
-                  <span className="text-xs text-gray-500">{fb.verdict}</span>
-                </div>
-                {fb.better_answer && (
-                  <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-indigo-400 flex items-center gap-1 mb-1"><Lightbulb className="w-3 h-3" /> Model Answer</p>
-                    <p className="text-xs text-gray-300">{fb.better_answer}</p>
-                  </div>
-                )}
+        <details className="vex-card overflow-hidden">
+          <summary className="px-5 py-4 text-[13px] font-medium text-white/50 cursor-pointer hover:text-white transition-colors">Review all answers ({feedbacks.length})</summary>
+          <div className="px-5 pb-5 space-y-3 max-h-[500px] overflow-y-auto">
+            {feedbacks.map((item, index) => (
+              <div key={index} className="rounded-xl p-4 space-y-2" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                <p className="text-[13px] text-white"><span className="text-white/40 font-medium">Q{index + 1}:</span> {item.question}</p>
+                <p className="text-[12px] text-white/50"><span className="text-white/30">Your answer:</span> {item.answer}</p>
+                <div className="flex items-center gap-2"><ScoreBar score={item.score} /><span className="text-[11px] text-white/40">{item.verdict}</span></div>
+                <FeedbackCard feedback={item} />
               </div>
             ))}
           </div>
         </details>
-
-        <div className="flex gap-3">
-          <button onClick={resetInterview}
-            className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-gray-300 font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-2">
-            <RotateCcw className="w-4 h-4" /> New Interview
-          </button>
-        </div>
+        <button onClick={resetInterview} className="vex-btn-secondary w-full py-3 text-[13px] flex items-center justify-center gap-2"><RotateCcw className="w-4 h-4" strokeWidth={1.5} /> Restart Interview</button>
       </div>
     );
   }
 
-  // ============ VIDEO CALL STYLE INTERVIEW ============
+  const statusLabel = {
+    [FLOW.QUESTION_SPEAKING]: 'Speaking',
+    [FLOW.WAITING_FOR_ANSWER]: 'Your turn',
+    [FLOW.ANSWER_SUBMITTED]: 'Answer submitted',
+    [FLOW.EVALUATING]: 'Thinking',
+    [FLOW.FEEDBACK_DISPLAYED]: 'Feedback ready',
+    [FLOW.BETTER_ANSWER_SPEAKING]: 'Explaining better answer',
+    [FLOW.SHORT_PAUSE]: 'One moment',
+    [FLOW.NEXT_QUESTION_GENERATION]: 'Preparing next question',
+  }[flowState] || (isSpeaking ? 'Speaking' : 'Listening');
+  const answerEnabled = flowState === FLOW.WAITING_FOR_ANSWER && !isLoading && !isSpeaking;
+  const interviewerImage = interviewer === 'female' ? '/interviewer-listening.png' : '/ai-interviewer.png';
+
+
   return (
-    <div
-      ref={fsContainerRef}
-      style={{
-        position: 'relative',
-        width: '100%',
-        height: '85vh',
-        background: '#080b14',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '12px',
-        gap: '12px',
-        borderRadius: '16px',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Main Video Area */}
-      <div className="flex-1 flex gap-4 min-h-0">
+    <div className="space-y-3">
+      {errorState && (
+        <div className="rounded-xl p-4 flex items-start gap-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <XCircle className="w-4 h-4 text-white/70 mt-0.5" />
+          <div className="flex-1"><p className="text-[13px] font-medium text-white">{errorState.title}</p><p className="text-[12px] text-white/50 mt-0.5">{errorState.message}</p></div>
+          <button onClick={() => setErrorState(null)} className="text-white/40 hover:text-white"><XCircle className="w-4 h-4" /></button>
+        </div>
+      )}
 
-        {/* AI Interviewer — Large Video Feed */}
-        <div className="flex-1 relative bg-black/40 rounded-2xl overflow-hidden border border-white/10" style={{ boxShadow: '0 0 60px rgba(79,70,229,0.08)' }}>
-          <InteractiveAvatar isSpeaking={isSpeaking} isListening={isListening} state={isThinking ? 'thinking' : 'idle'} />
+      <div ref={fsContainerRef} className="relative w-full rounded-2xl overflow-hidden flex flex-col p-3 gap-3" style={{ minHeight: '85vh', background: '#000000' }}>
+        <div className="flex-1 flex flex-col md:flex-row gap-3 min-h-0">
+          <div className="flex-1 relative bg-black rounded-xl overflow-hidden min-h-[420px]" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+             <div className="absolute inset-0 z-0">
+               <img src={interviewerImage} alt={`${selectedInterviewer.name} interviewer`} className="w-full h-full object-cover object-center" />
+             </div>
 
-          {/* Thinking Overlay */}
-          <AnimatePresence>
-            {isThinking && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute top-4 left-1/2 -translate-x-1/2 z-30"
-              >
-                <div className="flex items-center gap-2 bg-black/60 backdrop-blur-xl rounded-full px-4 py-2 border border-white/10">
-                  <div className="flex gap-1">
-                    {[0,1,2].map(i => (
-                      <motion.div key={i} className="w-2 h-2 rounded-full bg-indigo-400"
-                        animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.1, 0.8] }}
-                        transition={{ duration: 1.2, delay: i * 0.2, repeat: Infinity }}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-xs text-gray-300 font-medium">AI is thinking…</span>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Question Overlay */}
-          <motion.div
-            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            key={questionCount}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 font-medium">Question {questionCount}/5</span>
-              {currentQuestion?.topic && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-gray-300">{currentQuestion.topic}</span>
-              )}
-              {currentQuestion?.difficulty && (
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  currentQuestion.difficulty === 'Easy' ? 'bg-green-500/10 text-green-400' : currentQuestion.difficulty === 'Medium' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'
-                }`}>{currentQuestion.difficulty}</span>
-              )}
+            <div className="absolute top-3 left-3 z-20 flex items-center gap-2 liquid-glass rounded-full px-3 py-2">
+              <span className="w-2 h-2 rounded-full bg-white" /><span className="text-[11px] text-white">{statusLabel}</span>
             </div>
-            <p className="text-white text-sm leading-relaxed max-w-2xl">{currentQuestion?.question}</p>
-          </motion.div>
-
-          {/* Top-right controls */}
-          <div className="absolute top-3 right-3 flex gap-2 z-20">
-            {/* Live badge */}
-            <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/5">
-              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-xs text-gray-300 font-medium">LIVE</span>
+            <AnimatePresence>
+              {(flowState === FLOW.EVALUATING || flowState === FLOW.NEXT_QUESTION_GENERATION) && (
+                <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute top-4 left-1/2 -translate-x-1/2 z-30">
+                  <div className="flex items-center gap-2 liquid-glass rounded-full px-4 py-2"><Loader2 className="w-3.5 h-3.5 animate-spin text-white" /><span className="text-[11px] text-white font-medium">AI is evaluating this answer…</span></div>
+                </Motion.div>
+              )}
+            </AnimatePresence>
+            <div className="absolute bottom-0 left-0 right-0 p-6 z-20" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 50%, transparent 100%)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] px-2 py-0.5 rounded-lg text-white font-medium" style={{ background: 'rgba(255,255,255,0.15)' }}>Question {questionCount}/{TOTAL_QUESTIONS}</span>
+                {currentQuestion?.topic && <span className="text-[11px] px-2 py-0.5 rounded-lg text-white" style={{ background: 'rgba(255,255,255,0.1)' }}>{currentQuestion.topic}</span>}
+                {currentQuestion?.difficulty && <span className="text-[11px] px-2 py-0.5 rounded-lg text-white font-medium" style={{ background: 'rgba(255,255,255,0.08)' }}>{currentQuestion.difficulty}</span>}
+              </div>
+              <p className="text-white text-[14px] leading-relaxed max-w-2xl">{currentQuestion?.question}</p>
             </div>
-            {/* Voice toggle */}
-            <button onClick={toggleVoice}
-              className={`p-2 rounded-lg backdrop-blur-sm transition-all ${voiceEnabled ? 'bg-white/10 text-white' : 'bg-red-500/20 text-red-400'}`}>
-              {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </button>
-            {/* Fullscreen toggle */}
-            <button onClick={toggleFullscreen}
-              title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-              className="p-2 rounded-lg backdrop-blur-sm bg-white/10 text-white hover:bg-white/20 transition-all">
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
+            <div className="absolute top-3 right-3 flex gap-2 z-20">
+              <button onClick={toggleVoice} className={`p-2 rounded-full liquid-glass transition-all ${voiceEnabled ? 'text-white' : 'text-white/50'}`} title={voiceEnabled ? 'Mute voice' : 'Enable voice'}>{voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
+              <button onClick={toggleFullscreen} className="p-2 rounded-full liquid-glass text-white hover:bg-white/20 transition-all" title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>{isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}</button>
+            </div>
+          </div>
+
+          <div className="w-full md:w-80 flex-shrink-0 flex flex-col gap-3">
+            <div className="liquid-glass rounded-xl p-4">
+              <p className="text-[10px] font-medium text-white/40 uppercase tracking-wider mb-3">Progress · {selectedInterviewer.label} interviewer</p>
+              <div className="flex gap-1.5 mb-3">{Array.from({ length: TOTAL_QUESTIONS }, (_, index) => <div key={index} className="flex-1 h-1.5 rounded-full" style={{ background: index < scores.length ? 'rgba(255,255,255,0.6)' : index === scores.length ? '#FFFFFF' : 'rgba(255,255,255,0.1)' }} />)}</div>
+
+              {scores.length > 0 && <div className="flex items-center justify-between text-[11px]"><span className="text-white/40">Average score</span><span className="text-white font-medium">{avgScore}/10</span></div>}
+            </div>
+            {feedback ? <FeedbackCard feedback={feedback} /> : <div className="liquid-glass rounded-xl p-4 flex-1 min-h-[180px] flex items-center justify-center"><div className="text-center"><Mic className="w-7 h-7 text-white/30 mx-auto mb-2" strokeWidth={1.5} /><p className="text-[11px] text-white/40">{flowState === FLOW.EVALUATING ? 'Reviewing this answer…' : 'Answer the question to see AI feedback here'}</p></div></div>}
           </div>
         </div>
 
-        {/* Right Panel — Feedback + Info */}
-        <div className="w-80 flex-shrink-0 flex flex-col gap-4">
-
-          {/* Score Progress */}
-          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Progress</p>
-            <div className="flex gap-2 mb-3">
-              {[1, 2, 3, 4, 5].map(n => (
-                <div key={n} className={`flex-1 h-2 rounded-full ${
-                  n < questionCount ? 'bg-green-500' : n === questionCount ? 'bg-indigo-500' : 'bg-white/5'
-                }`} />
-              ))}
+        <div className="flex-shrink-0 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-3">
+            <button onClick={toggleMic} disabled={!answerEnabled} className={`p-3 rounded-full transition-all ${isListening ? 'bg-white text-black animate-soft-pulse' : 'liquid-glass text-white/80 hover:text-white'} disabled:opacity-40`}><>{isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}</></button>
+            <div className="flex-1 relative">
+             <textarea rows={2} value={userInput} onChange={(event) => { setUserInput(event.target.value); setTranscript(event.target.value); }} onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); submitAnswer(); } }} disabled={!answerEnabled} placeholder={isListening ? 'Speak now…' : 'Type your answer or click mic to speak…'} className="w-full px-4 py-3 rounded-2xl text-white placeholder-white/40 focus:outline-none disabled:opacity-50 resize-none" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }} />
             </div>
-            {scores.length > 0 && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500">Avg Score</span>
-                <span className="text-indigo-400 font-bold">{avgScore}/10</span>
-              </div>
-            )}
+            <button onClick={submitAnswer} disabled={!answerEnabled || !userInput.trim()} className="p-3 rounded-full bg-white text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/90">{isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}</button>
+            <button onClick={endInterview} className="p-3 rounded-full text-white/70 hover:text-white transition-all" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }} title="End interview"><PhoneOff className="w-5 h-5" /></button>
           </div>
-
-          {/* Live Feedback Card */}
-          <AnimatePresence>
-            {showFeedback && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3 flex-1 overflow-y-auto"
-              >
-                <p className="text-xs font-semibold text-amber-400 flex items-center gap-1"><Sparkles className="w-3 h-3" /> Feedback</p>
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
-                    showFeedback.score >= 8 ? 'text-green-400 bg-green-500/10' : showFeedback.score >= 5 ? 'text-yellow-400 bg-yellow-500/10' : 'text-red-400 bg-red-500/10'
-                  }`}>{showFeedback.verdict}</span>
-                  <span className="text-sm font-bold text-white">{showFeedback.score}/10</span>
-                </div>
-                <ScoreBar score={showFeedback.score} />
-                {showFeedback.strengths?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-green-400 flex items-center gap-1 mb-1"><TrendingUp className="w-3 h-3" /> Strengths</p>
-                    {showFeedback.strengths.map((s, i) => (
-                      <p key={i} className="text-xs text-gray-400 flex gap-1.5 mb-0.5"><CheckCircle2 className="w-3 h-3 text-green-400 mt-0.5 flex-shrink-0" />{s}</p>
-                    ))}
-                  </div>
-                )}
-                {showFeedback.weaknesses?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-red-400 flex items-center gap-1 mb-1"><TrendingDown className="w-3 h-3" /> Improve</p>
-                    {showFeedback.weaknesses.map((w, i) => (
-                      <p key={i} className="text-xs text-gray-400 flex gap-1.5 mb-0.5"><XCircle className="w-3 h-3 text-red-400 mt-0.5 flex-shrink-0" />{w}</p>
-                    ))}
-                  </div>
-                )}
-                {showFeedback.better_answer && (
-                  <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-indigo-400 flex items-center gap-1 mb-1"><Lightbulb className="w-3 h-3" /> Model Answer</p>
-                    <p className="text-xs text-gray-300 leading-relaxed">{showFeedback.better_answer}</p>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {!showFeedback && (
-            <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <Mic className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                <p className="text-xs text-gray-500">Answer the question to<br/>see AI feedback here</p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom Control Bar */}
-      <div className="flex-shrink-0 pt-2 border-t border-white/10">
-        <div className="flex items-center gap-3">
-          {/* Mic toggle */}
-          <button onClick={toggleMic}
-            className={`p-3 rounded-xl transition-all ${isListening
-              ? 'bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-pulse'
-              : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'}`}>
-            {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-          </button>
-
-          {/* Text input */}
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              value={userInput}
-              onChange={(e) => { setUserInput(e.target.value); setTranscript(e.target.value); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') submitAnswer(); }}
-              disabled={isLoading || isSpeaking}
-              placeholder={isListening ? '🎙️ Speak now...' : 'Type your answer or click mic to speak...'}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50 pr-12"
-            />
-            {isListening && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-[2px]">
-                {[0, 1, 2, 3].map(i => (
-                  <motion.div key={i} className="w-1 bg-red-400 rounded-full"
-                    animate={{ height: [4, 14, 4] }}
-                    transition={{ duration: 0.5, delay: i * 0.1, repeat: Infinity }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Send */}
-          <button onClick={submitAnswer} disabled={isLoading || !userInput.trim() || isSpeaking}
-            className="p-3 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white transition-all hover:from-indigo-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
-            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-          </button>
-
-          {/* End call */}
-          <button onClick={endInterview}
-            className="p-3 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all border border-red-500/20">
-            <PhoneOff className="w-5 h-5" />
-          </button>
         </div>
       </div>
     </div>

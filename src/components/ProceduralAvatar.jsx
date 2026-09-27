@@ -9,7 +9,7 @@ import * as THREE from 'three';
 // ============================================================
 
 // ─── MATERIALS ─────────────────────────────────────────────
-function useMaterials() {
+function useMaterials(gender) {
   return useMemo(() => ({
     skin: new THREE.MeshStandardMaterial({
       color: new THREE.Color('#c4906a'),
@@ -27,12 +27,12 @@ function useMaterials() {
       metalness: 0.12,
     }),
     shirt: new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#e8e8f0'),
+      color: new THREE.Color(gender === 'female' ? '#d6d8e8' : '#e8e8f0'),
       roughness: 0.55,
       metalness: 0.0,
     }),
     tie: new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#4338ca'),
+      color: new THREE.Color(gender === 'female' ? '#8b5cf6' : '#4338ca'),
       roughness: 0.35,
       metalness: 0.18,
     }),
@@ -76,7 +76,7 @@ function useMaterials() {
       roughness: 0.25,
       metalness: 0.0,
     }),
-  }), []);
+  }), [gender]);
 }
 
 // ============================================================
@@ -238,15 +238,14 @@ function Ear({ position, scaleX = 1, mat }) {
 // ============================================================
 //  MAIN AVATAR
 // ============================================================
-export default function ProceduralAvatar({ isSpeaking, isListening, state }) {
+export default function ProceduralAvatar({ gender = 'male', isSpeaking, isListening }) {
   const groupRef = useRef();
   const headRef = useRef();
-  const mat = useMaterials();
+  const mat = useMaterials(gender);
 
   const [blinkScale, setBlinkScale] = useState(1);
   const [mouthOpen, setMouthOpen] = useState(0);
   const [mouthWidth, setMouthWidth] = useState(1);
-  const [browRaise, setBrowRaise] = useState(0);
   const timeRef = useRef(0);
   const speakPhaseRef = useRef(0);
   const headSwayRef = useRef({ targetX: 0, targetY: 0, currentX: 0, currentY: 0 });
@@ -280,10 +279,7 @@ export default function ProceduralAvatar({ isSpeaking, isListening, state }) {
     return () => clearInterval(interval);
   }, []);
 
-  // ─── Brow raise on listening ─────────────────────────────
-  useEffect(() => {
-    setBrowRaise(isListening ? 0.5 : 0);
-  }, [isListening]);
+  const browRaise = isListening ? 0.5 : 0;
 
   // ─── Frame loop ──────────────────────────────────────────
   useFrame((_, delta) => {
@@ -384,6 +380,18 @@ export default function ProceduralAvatar({ isSpeaking, isListening, state }) {
           <sphereGeometry args={[0.13, 20, 20, -Math.PI * 0.6, Math.PI * 1.2, Math.PI * 0.2, Math.PI * 0.6]} />
           <primitive object={mat.hair} attach="material" />
         </mesh>
+        {gender === 'female' && (
+          <>
+            <mesh position={[-0.13, 0.01, -0.02]} scale={[0.8, 1.5, 0.8]}>
+              <sphereGeometry args={[0.06, 18, 18]} />
+              <primitive object={mat.hair} attach="material" />
+            </mesh>
+            <mesh position={[0.13, 0.01, -0.02]} scale={[0.8, 1.5, 0.8]}>
+              <sphereGeometry args={[0.06, 18, 18]} />
+              <primitive object={mat.hair} attach="material" />
+            </mesh>
+          </>
+        )}
 
         {/* ══════ EYES ══════ */}
         <Eye position={[-0.045, 0.035, 0.115]} blinkScale={blinkScale} mat={mat} />

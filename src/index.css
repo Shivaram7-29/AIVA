@@ -1,50 +1,350 @@
 @import "tailwindcss";
 
+/* ============================================================
+   PlacementAI — VEX Cinematic Design System
+   - Landing hero: fullscreen raw video, white typography,
+     liquid-glass navbar, character-by-character animation.
+   - Inner application: dark cinematic workspace, black/near-black
+     background, white text, gray-300/400 secondary, thin white
+     borders, liquid-glass cards, restrained monochrome palette.
+   - Global font: Inter (weights 300;400;500;600).
+   ============================================================ */
 @theme {
-  --color-primary: #4F46E5;
-  --color-primary-dark: #3730A3;
-  --color-secondary: #06B6D4;
+  /* VEX dark palette */
+  --color-canvas-dark: #080808;
+  --color-canvas-dark-2: #0B0B0B;
+  --color-surface-dark: #111114;
+  --color-surface-dark-2: #16161A;
+
+  /* Text */
+  --color-ink: #FFFFFF;
+  --color-ink-soft: #E5E5EA;
+  --color-muted: #A1A1A6;
+  --color-muted-2: #86868B;
+
+  /* Borders — thin, subtle */
+  --color-line: rgba(255, 255, 255, 0.12);
+  --color-line-soft: rgba(255, 255, 255, 0.08);
+  --color-line-faint: rgba(255, 255, 255, 0.06);
+
+  /* Inter is the global font (per VEX spec) */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+    "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 :root {
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+    "Segoe UI", Roboto, Arial, sans-serif;
+  line-height: 1.55;
   font-weight: 400;
-
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #0B0F19; /* Dark background */
+  color: #FFFFFF;
+  background-color: #080808;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11", "ss01", "ss03";
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  display: block;
   min-width: 320px;
   min-height: 100vh;
+  background-color: #080808;
+  color: #FFFFFF;
+  font-family: "Inter", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
   width: 100%;
 }
 
-/* Custom scrollbar for better aesthetics */
+/* ── Scrollbar (dark) ───────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
+  height: 10px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+  background-clip: padding-box;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #334155;
+/* Smooth, premium transitions for everything interactive */
+button,
+a,
+input,
+textarea,
+select {
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+
+/* Selection color */
+::selection {
+  background: rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+}
+
+/* Focus ring — subtle white */
+:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
   border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+/* ─────────────────────────────────────────────────────────────
+   LIQUID GLASS — VEX hero spec (exact)
+   Use on: landing navbar, hero secondary button, hero right tag,
+   AI Interview floating controls, modals, sidebar. Keep SUBTLE.
+   ───────────────────────────────────────────────────────────── */
+.liquid-glass {
+  background: rgba(0, 0, 0, 0.4);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.1) 20%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.1) 80%,
+    rgba(255, 255, 255, 0.3) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── VEX card — dark glass surface used across inner pages ──── */
+.vex-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 0.25s ease, transform 0.25s ease, background 0.25s ease;
+}
+.vex-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Solid dark card (no transparency) */
+.vex-card-solid {
+  background: #111114;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  transition: border-color 0.25s ease, transform 0.25s ease;
+}
+.vex-card-solid:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+/* ── VEX input — dark glass field ───────────────────────────── */
+.vex-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #FFFFFF;
+  padding: 12px 14px;
+  font-size: 14px;
+  width: 100%;
+}
+.vex-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+.vex-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── VEX buttons ────────────────────────────────────────────── */
+.vex-btn-primary {
+  background: #FFFFFF;
+  color: #000000;
+  border-radius: 10px;
+  padding: 12px 24px;
+  font-weight: 500;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.vex-btn-primary:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+.vex-btn-primary:active {
+  transform: scale(0.98);
+}
+.vex-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.vex-btn-secondary {
+  background: transparent;
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 12px 24px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.vex-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+.vex-btn-secondary:active {
+  transform: scale(0.98);
+}
+
+/* Pill button (rounded-full) variant */
+.vex-btn-pill-primary {
+  background: #FFFFFF;
+  color: #000000;
+  border-radius: 9999px;
+  padding: 12px 24px;
+  font-weight: 500;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.vex-btn-pill-primary:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+.vex-btn-pill-primary:active {
+  transform: scale(0.98);
+}
+.vex-btn-pill-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Kicker (small uppercase label) ─────────────────────────── */
+.kicker {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+/* ── Monochrome skill pill ──────────────────────────────────── */
+.skill-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.skill-pill-missing {
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Status dot (monochrome, very restrained) ───────────────── */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ── Animations ────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fadeUp 0.5s ease both;
+}
+
+@keyframes softPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.animate-soft-pulse {
+  animation: softPulse 2s ease-in-out infinite;
+}
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-page-enter {
+  animation: pageEnter 0.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* ── Line clamp helpers ────────────────────────────────────── */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-soft-pulse {
+    animation: none !important;
+  }
 }

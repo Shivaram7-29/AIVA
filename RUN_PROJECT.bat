@@ -57,6 +57,11 @@ if %errorlevel% neq 0 (
     pause
     exit /b
 )
+echo Installing Playwright Chromium browser...
+python -m playwright install chromium
+if %errorlevel% neq 0 (
+    echo [WARNING] Chromium installation failed. The browser agent will be unavailable until it is installed manually.
+)
 cd ..
 
 :: 5. Start servers

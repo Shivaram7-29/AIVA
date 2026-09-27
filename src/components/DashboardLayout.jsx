@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  BrainCircuit,
   LayoutDashboard,
-  FileText,
   BookOpen,
   Code,
   Mic,
@@ -12,16 +10,22 @@ import {
   LogOut,
   Menu,
   X,
-  ChevronRight,
   Bot,
-  BarChart3,
+  Briefcase,
 } from 'lucide-react';
+
+/* ----------------------------------------------------------------------------
+ * PlacementAI — VEX-style Application Shell
+ * Dark floating glass sidebar, white nav text, active state = subtle
+ * white/glass treatment. Mobile drawer with smooth open/close.
+ * All routes and navigation behavior preserved.
+ * ------------------------------------------------------------------------- */
 
 const sidebarLinks = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', end: true },
-  { to: '/dashboard/job-agent', icon: Bot, label: 'Job Search Agent' },
-  { to: '/dashboard/applications', icon: BarChart3, label: 'Applications' },
-  { to: '/dashboard/upload', icon: FileText, label: 'Resume Analyzer' },
+  { to: '/dashboard/job-agent', icon: Bot, label: 'Job Search' },
+  { to: '/dashboard/applications', icon: Briefcase, label: 'Applications' },
+
   { to: '/dashboard/aptitude', icon: BookOpen, label: 'Aptitude Test' },
   { to: '/dashboard/coding', icon: Code, label: 'Coding Round' },
   { to: '/dashboard/interview', icon: Mic, label: 'AI Interview' },
@@ -32,42 +36,54 @@ const DashboardLayout = () => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleLogout = () => {
-    navigate('/');
-  };
+  const handleLogout = () => navigate('/');
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] flex">
+    <div className="min-h-screen flex" style={{ background: '#080808' }}>
       {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-64 bg-[#0d1224]/90 backdrop-blur-xl border-r border-white/5 flex flex-col transition-transform duration-300 ${
+        className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-[260px] flex flex-col transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
+        style={{
+          background: 'rgba(11, 11, 11, 0.9)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+        }}
       >
-        {/* Logo */}
-        <div className="flex items-center gap-2 px-6 py-6 border-b border-white/5">
-          <BrainCircuit className="w-7 h-7 text-indigo-500" />
-          <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-cyan-400">
+        {/* Brand */}
+        <div className="flex items-center gap-2 px-5 h-16 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          <span className="text-xl font-semibold tracking-tight text-white">
             PlacementAI
           </span>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="ml-auto lg:hidden text-gray-400 hover:text-white"
+            className="ml-auto lg:hidden text-white/50 hover:text-white p-1"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Nav Links */}
-        <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          <p className="text-[10px] font-medium text-white/30 uppercase tracking-wider px-3 mb-2 mt-1">
+            Workspace
+          </p>
           {sidebarLinks.map((link) => (
             <NavLink
               key={link.to}
@@ -75,27 +91,47 @@ const DashboardLayout = () => {
               end={link.end}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all ${
                   isActive
-                    ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20'
-                    : 'text-gray-400 hover:bg-white/5 hover:text-white border border-transparent'
+                    ? 'text-white'
+                    : 'text-white/50 hover:text-white/80'
                 }`
               }
+              style={({ isActive }) =>
+                isActive
+                  ? { background: 'rgba(255, 255, 255, 0.08)' }
+                  : {}
+              }
             >
-              <link.icon className="w-5 h-5 flex-shrink-0" />
-              <span>{link.label}</span>
-              <ChevronRight className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+              {({ isActive }) => (
+                <>
+                  {isActive && (
+                    <motion.span
+                      layoutId="nav-active"
+                      className="absolute left-0 w-[2px] h-5 rounded-full bg-white"
+                      style={{ marginLeft: '-12px' }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <link.icon
+                    className="w-[18px] h-[18px] flex-shrink-0"
+                    strokeWidth={isActive ? 2 : 1.5}
+                  />
+                  <span>{link.label}</span>
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
 
         {/* Logout */}
-        <div className="px-3 pb-6">
+        <div className="px-3 py-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium text-red-400/80 hover:bg-red-500/10 hover:text-red-400 transition-all border border-transparent hover:border-red-500/20"
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-[13px] font-medium text-white/50 hover:text-white transition-colors"
+            style={{ background: 'transparent' }}
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-[18px] h-[18px]" strokeWidth={1.5} />
             <span>Logout</span>
           </button>
         </div>
@@ -104,38 +140,53 @@ const DashboardLayout = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-h-screen">
         {/* Top Bar */}
-        <header className="sticky top-0 z-30 bg-[#0B0F19]/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between">
+        <header
+          className="sticky top-0 z-30 px-6 h-16 flex items-center justify-between"
+          style={{
+            background: 'rgba(8, 8, 8, 0.8)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          }}
+        >
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden text-gray-400 hover:text-white transition-colors"
+              className="lg:hidden text-white p-1"
             >
-              <Menu className="w-6 h-6" />
+              <Menu className="w-5 h-5" />
             </button>
             <div>
-              <h2 className="text-lg font-semibold text-white">Welcome back! 👋</h2>
-              <p className="text-sm text-gray-500">Your AI-powered job search assistant</p>
+              <h2 className="text-[14px] font-medium text-white leading-tight">
+                Welcome back.
+              </h2>
+              <p className="text-[12px] text-white/40">Your AI-powered placement workspace</p>
             </div>
           </div>
 
-          {/* User Avatar */}
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-white">Demo User</p>
-              <p className="text-xs text-gray-500">demo@placementai.com</p>
+              <p className="text-[12px] font-medium text-white leading-tight">Demo User</p>
+              <p className="text-[11px] text-white/40">demo@placementai.com</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-indigo-500/20">
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white font-medium text-[12px]"
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+              }}
+            >
               DU
             </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-6 overflow-y-auto">
+        <main className="flex-1 p-6 md:p-8 overflow-y-auto">
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
           >
             <Outlet />
           </motion.div>

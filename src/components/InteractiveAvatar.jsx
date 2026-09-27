@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 
 // ============================================================
 // REALISTIC & STABLE AI INTERVIEWER
@@ -7,12 +7,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 // Simulates life entirely through subtle lighting and glowing.
 // ============================================================
 
-const INTERVIEWER_NAME = 'Arjun Mehta';
-const INTERVIEWER_TITLE = 'Senior Technical Interviewer';
-const AVATAR_IMG = '/real-interviewer.png'; // Single fixed image
+const FALLBACK_INTERVIEWERS = {
+  male: { name: 'Arjun Mehta', title: 'Senior Interviewer', image: '/real-interviewer.png' },
+  female: { name: 'Maya Iyer', title: 'Senior Interviewer', image: '/interviewer-listening.png' },
+};
 
-export default function InteractiveAvatar({ isSpeaking, isListening, state = 'idle' }) {
+export default function InteractiveAvatar({ gender = 'male', isSpeaking, isListening }) {
   const containerRef = useRef(null);
+  const interviewer = FALLBACK_INTERVIEWERS[gender] || FALLBACK_INTERVIEWERS.male;
 
   // ─── Stable Lighting & Motion Variants ──────────────────────
   // STRICT RULES: NO x/y/translate. NO fake lip sync. NO distortion.
@@ -67,7 +69,7 @@ export default function InteractiveAvatar({ isSpeaking, isListening, state = 'id
       }}
     >
       {/* ─── MAIN AVATAR WRAPPER ─────────────────────────── */}
-      <motion.div
+      <Motion.div
         variants={imageVariants}
         initial="idle"
         animate={currentVariant}
@@ -85,15 +87,15 @@ export default function InteractiveAvatar({ isSpeaking, isListening, state = 'id
         <div style={{
           position: 'absolute',
           inset: 0,
-          backgroundImage: `url(${AVATAR_IMG})`,
+           backgroundImage: `url(${interviewer.image})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           zIndex: 1,
         }} />
-      </motion.div>
+      </Motion.div>
 
       {/* ─── Speaking Glow Overlay ──────────────────────────────── */}
-      <motion.div
+      <Motion.div
         variants={glowVariants}
         initial="idle"
         animate={currentVariant}
@@ -109,7 +111,7 @@ export default function InteractiveAvatar({ isSpeaking, isListening, state = 'id
       {/* ─── Speaking Pulse Ring ──────────────────────────────── */}
       <AnimatePresence>
         {isSpeaking && (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: 0.5 } }}
@@ -122,7 +124,7 @@ export default function InteractiveAvatar({ isSpeaking, isListening, state = 'id
               pointerEvents: 'none',
             }}
           >
-            <motion.div
+            <Motion.div
               style={{
                 position: 'absolute',
                 inset: '-4px',
@@ -135,7 +137,7 @@ export default function InteractiveAvatar({ isSpeaking, isListening, state = 'id
               }}
               transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
             />
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
 
@@ -154,8 +156,8 @@ export default function InteractiveAvatar({ isSpeaking, isListening, state = 'id
         border: '1px solid rgba(255,255,255,0.1)',
       }}
       >
-        <span style={{ color: '#fff', fontSize: '14px', fontWeight: '600' }}>{INTERVIEWER_NAME}</span>
-        <span style={{ color: '#9ca3af', fontSize: '12px' }}>{INTERVIEWER_TITLE}</span>
+         <span style={{ color: '#fff', fontSize: '14px', fontWeight: '600' }}>{interviewer.name}</span>
+         <span style={{ color: '#9ca3af', fontSize: '12px' }}>{interviewer.title}</span>
       </div>
 
       {/* ─── Removed Audio Waveform Indicator to prevent lip-movement perception ─── */}

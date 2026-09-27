@@ -1,16 +1,22 @@
+/* Three.js animation requires mutating scene nodes and morph-target arrays in useFrame. */
+/* eslint-disable react-hooks/immutability */
 import React, { useRef, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
 // ─── STEP 1: LOAD THE 3D MODEL ────────────────────────────────
-// The user needs to download a `.glb` from Ready Player Me and place it in the `public` folder
-// as `avatar.glb`. Make sure it's exported with ARKit/Oculus Visemes enabled.
-const AVATAR_URL = "/avatar.glb";
+// Optional local assets can be placed at public/avatars/*.glb. Make sure they
+// are exported with ARKit/Oculus Visemes enabled for facial animation.
+const AVATAR_URLS = {
+  male: '/avatars/male-interviewer.glb',
+  female: '/avatars/female-interviewer.glb',
+};
 
-export default function RealisticAvatar({ isSpeaking, isListening, state }) {
+export default function RealisticAvatar({ gender = 'male', isSpeaking, isListening }) {
+  const avatarUrl = AVATAR_URLS[gender] || AVATAR_URLS.male;
   // Preload the GLTF model
-  const { nodes, materials } = useGLTF(AVATAR_URL);
+  const { nodes } = useGLTF(avatarUrl);
   
   const groupRef = useRef();
   const timeRef = useRef(0);
@@ -172,5 +178,3 @@ export default function RealisticAvatar({ isSpeaking, isListening, state }) {
   );
 }
 
-// Preload to avoid loading delay
-useGLTF.preload(AVATAR_URL);

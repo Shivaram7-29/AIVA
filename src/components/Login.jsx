@@ -1,7 +1,22 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { BrainCircuit, Mail, Lock, User, ArrowRight, Globe } from 'lucide-react';
+import {
+  Mail,
+  Lock,
+  User,
+  ArrowRight,
+  Globe,
+  ChevronLeft,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
+
+/* ----------------------------------------------------------------------------
+ * PlacementAI — VEX-style Login
+ * Black backdrop, liquid-glass auth card, white typography, Inter.
+ * Auth logic preserved exactly (fake auth → /dashboard).
+ * ------------------------------------------------------------------------- */
 
 const Login = () => {
   const navigate = useNavigate();
@@ -9,50 +24,68 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Fake authentication — simulate a short delay then navigate
+    // Fake authentication — simulate a short delay then navigate.
+    // Preserved exactly as in the original project.
     setTimeout(() => {
       setIsLoading(false);
-      navigate('/dashboard/upload');
+      navigate('/dashboard');
     }, 1200);
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] flex items-center justify-center relative overflow-hidden px-4">
-      {/* Background Gradients */}
-      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/20 rounded-full mix-blend-screen filter blur-[120px]"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-cyan-500/15 rounded-full mix-blend-screen filter blur-[120px]"></div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-purple-600/10 rounded-full mix-blend-screen filter blur-[100px]"></div>
+    <div className="min-h-screen relative bg-black flex items-center justify-center px-4 py-12 overflow-hidden">
+      {/* Subtle vignette so the glass card pops — no heavy gradients */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse at 50% 50%, rgba(20,20,20,1) 0%, rgba(0,0,0,1) 70%)',
+        }}
+      />
 
-      {/* Glass Card */}
+      <div className="absolute top-6 left-6 z-10">
+        <button
+          onClick={() => navigate('/')}
+          className="text-[13px] text-gray-400 hover:text-white inline-flex items-center gap-1 transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Back to home
+        </button>
+      </div>
+
       <motion.div
-        initial={{ opacity: 0, y: 30, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: 'easeOut' }}
-        className="w-full max-w-md relative z-10"
+        className="w-full max-w-[420px] relative z-10"
       >
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <BrainCircuit className="w-9 h-9 text-indigo-500" />
-          <span className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-cyan-400">
+        {/* Brand */}
+        <div className="flex flex-col items-center mb-10">
+          <span className="text-2xl font-semibold tracking-tight text-white">
             PlacementAI
           </span>
+          <p className="text-[13px] text-gray-400 mt-1">
+            From preparation to placement.
+          </p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+        {/* Liquid glass auth card */}
+        <div className="liquid-glass rounded-2xl p-7">
           {/* Toggle */}
-          <div className="flex bg-white/5 rounded-xl p-1 mb-8">
+          <div className="flex bg-white/5 rounded-lg p-1 mb-7 border border-white/10">
             <button
               onClick={() => setIsLogin(true)}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 ${
+              className={`flex-1 py-2 rounded-md text-[13px] font-medium transition-all ${
                 isLogin
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25'
+                  ? 'bg-white text-black'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -60,9 +93,9 @@ const Login = () => {
             </button>
             <button
               onClick={() => setIsLogin(false)}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 ${
+              className={`flex-1 py-2 rounded-md text-[13px] font-medium transition-all ${
                 !isLogin
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25'
+                  ? 'bg-white text-black'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -70,8 +103,7 @@ const Login = () => {
             </button>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <AnimatePresence mode="wait">
               {!isLogin && (
                 <motion.div
@@ -79,17 +111,20 @@ const Login = () => {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3 }}
+                  transition={{ duration: 0.25 }}
+                  className="overflow-hidden"
                 >
-                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Full Name</label>
+                  <label className="block text-[12px] font-medium text-gray-400 mb-1.5">
+                    Full Name
+                  </label>
                   <div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                     <input
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="John Doe"
-                      className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                      className="w-full pl-10 pr-3 py-3 bg-white/5 border border-white/10 rounded-lg text-[14px] text-white placeholder-gray-500 focus:outline-none focus:border-white/30 focus:bg-white/10 transition-colors"
                     />
                   </div>
                 </motion.div>
@@ -97,41 +132,56 @@ const Login = () => {
             </AnimatePresence>
 
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1.5">Email</label>
+              <label className="block text-[12px] font-medium text-gray-400 mb-1.5">
+                Email
+              </label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                  className="w-full pl-10 pr-3 py-3 bg-white/5 border border-white/10 rounded-lg text-[14px] text-white placeholder-gray-500 focus:outline-none focus:border-white/30 focus:bg-white/10 transition-colors"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-1.5">Password</label>
+              <label className="block text-[12px] font-medium text-gray-400 mb-1.5">
+                Password
+              </label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                  className="w-full pl-10 pr-10 py-3 bg-white/5 border border-white/10 rounded-lg text-[14px] text-white placeholder-gray-500 focus:outline-none focus:border-white/30 focus:bg-white/10 transition-colors"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" strokeWidth={1.8} />
+                  ) : (
+                    <Eye className="w-4 h-4" strokeWidth={1.8} />
+                  )}
+                </button>
               </div>
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold transition-all flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(79,70,229,0.3)] hover:shadow-[0_0_35px_rgba(79,70,229,0.5)] disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full py-3.5 rounded-lg bg-white text-black font-medium text-[15px] transition-all active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:bg-gray-200"
             >
               {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
               ) : (
                 <>
                   {isLogin ? 'Login' : 'Create Account'}
@@ -141,26 +191,23 @@ const Login = () => {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-6">
+          <div className="flex items-center gap-3 my-5">
             <div className="flex-1 h-px bg-white/10"></div>
-            <span className="text-xs text-gray-500 font-medium">OR</span>
+            <span className="text-[11px] text-gray-500 font-medium">OR</span>
             <div className="flex-1 h-px bg-white/10"></div>
           </div>
 
-          {/* Google Button */}
-          <button className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-gray-300 font-medium hover:bg-white/10 transition-all flex items-center justify-center gap-3">
-            <Globe className="w-5 h-5" />
+          <button className="w-full py-3 rounded-lg bg-white/5 border border-white/10 text-white font-medium text-[14px] hover:bg-white/10 flex items-center justify-center gap-2.5 transition-colors">
+            <Globe className="w-4 h-4" />
             Continue with Google
           </button>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-gray-500 text-sm mt-6">
+        <p className="text-center text-gray-400 text-[13px] mt-6">
           {isLogin ? "Don't have an account? " : 'Already have an account? '}
           <button
             onClick={() => setIsLogin(!isLogin)}
-            className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+            className="text-white hover:text-gray-300 font-medium transition-colors"
           >
             {isLogin ? 'Sign Up' : 'Login'}
           </button>
