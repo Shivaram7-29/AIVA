@@ -63,21 +63,37 @@ const useSpeech = () => {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const speechIdRef = useRef(0);
   const completionRef = useRef(null);
+  const keepAliveRef = useRef(null);
+
+  const clearKeepAlive = () => {
+    if (keepAliveRef.current) {
+      window.clearInterval(keepAliveRef.current);
+      keepAliveRef.current = null;
+    }
+  };
 
   const speak = useCallback((text, onComplete) => {
+    clearKeepAlive();
     const speechId = speechIdRef.current + 1;
     speechIdRef.current = speechId;
     completionRef.current = onComplete;
+    let completed = false;
+
     const complete = () => {
+      if (completed) return;
+      completed = true;
+      clearKeepAlive();
       if (speechIdRef.current !== speechId) return;
       completionRef.current = null;
       setIsSpeaking(false);
       onComplete?.();
     };
+
     if (!voiceEnabled || typeof window === 'undefined' || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
       complete();
       return;
     }
+
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.9;
@@ -85,29 +101,59 @@ const useSpeech = () => {
     const voices = window.speechSynthesis.getVoices();
     const preferred = voices.find((voice) => voice.lang.startsWith('en')) || voices[0];
     if (preferred) utterance.voice = preferred;
+
     utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = complete;
-    utterance.onerror = complete;
+
+    // Progression relies strictly on the actual speech completion event
+    utterance.onend = () => {
+      complete();
+    };
+
+    utterance.onerror = (event) => {
+      clearKeepAlive();
+      setIsSpeaking(false);
+      completionRef.current = null;
+      // Do not advance if speech was canceled, interrupted, or failed
+      if (event?.error === 'canceled' || event?.error === 'interrupted') {
+        return;
+      }
+      console.warn('[TTS] Speech synthesis error:', event?.error);
+    };
+
+    // Chromium keep-alive: prevents long feedback utterances (>14s) from stalling
+    keepAliveRef.current = window.setInterval(() => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        if (!window.speechSynthesis.speaking) {
+          clearKeepAlive();
+        } else {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        }
+      }
+    }, 10000);
+
     window.speechSynthesis.speak(utterance);
   }, [voiceEnabled]);
 
-  const stop = useCallback(({ complete = false } = {}) => {
-    const pendingCompletion = completionRef.current;
+  const stop = useCallback(() => {
+    clearKeepAlive();
     completionRef.current = null;
     speechIdRef.current += 1;
     if (typeof window !== 'undefined') window.speechSynthesis?.cancel();
     setIsSpeaking(false);
-    if (complete) pendingCompletion?.();
   }, []);
 
   const toggleVoice = () => {
-    if (voiceEnabled) stop({ complete: true });
+    if (voiceEnabled) stop();
     setVoiceEnabled((enabled) => !enabled);
   };
 
   useEffect(() => {
     window.speechSynthesis?.getVoices();
-    return () => window.speechSynthesis?.cancel();
+    return () => {
+      clearKeepAlive();
+      window.speechSynthesis?.cancel();
+    };
   }, []);
 
   return { speak, stop, isSpeaking, voiceEnabled, toggleVoice };
@@ -294,6 +340,7 @@ const AIInterview = () => {
       setUserInput('');
       setTranscript('');
       setFeedback(null);
+      advancingRef.current = false;
       setFlowState(FLOW.QUESTION_SPEAKING);
       speak(data.question, () => setFlowState(FLOW.WAITING_FOR_ANSWER));
     } catch (err) {
@@ -305,35 +352,46 @@ const AIInterview = () => {
     }
   }, [apiError, resumeProfile, role, setTranscript, showError, speak, type]);
 
+  const advanceToNextOrFinish = useCallback((pending) => {
+    if (advancingRef.current) return;
+    advancingRef.current = true;
+    setFlowState(FLOW.SHORT_PAUSE);
+
+    if (pauseTimerRef.current) window.clearTimeout(pauseTimerRef.current);
+    pauseTimerRef.current = window.setTimeout(() => {
+      pauseTimerRef.current = null;
+      const qNum = Number(pending.record?.questionNumber) || questionCount;
+      if (qNum >= TOTAL_QUESTIONS) {
+        finishInterview();
+        return;
+      }
+
+      // Step 7: Speak transition message and strictly wait until it finishes
+      speak("Alright, let's move on to the next question.", () => {
+        // Step 8: Only after transition finishes should next question be generated/started
+        generateNextQuestion({
+          question: pending.record.question,
+          answer: pending.record.answer,
+          evaluation: pending.feedback,
+          history: pending.history,
+          questionNumber: qNum,
+          currentDifficulty: pending.currentDifficulty,
+        });
+      });
+    }, 1000);
+  }, [finishInterview, generateNextQuestion, questionCount, speak]);
+
   useEffect(() => {
     if (flowState !== FLOW.FEEDBACK_DISPLAYED || !pendingFeedbackSpeechRef.current) return;
     const pending = pendingFeedbackSpeechRef.current;
     pendingFeedbackSpeechRef.current = null;
     setFlowState(FLOW.BETTER_ANSWER_SPEAKING);
+
+    // Speak entire feedback and wait strictly for completion event (no racing timers)
     speak(pending.text, () => {
-      if (advancingRef.current) return;
-      advancingRef.current = true;
-      setFlowState(FLOW.SHORT_PAUSE);
-      if (pauseTimerRef.current) window.clearTimeout(pauseTimerRef.current);
-      pauseTimerRef.current = window.setTimeout(() => {
-        pauseTimerRef.current = null;
-        if (pending.record.questionNumber >= TOTAL_QUESTIONS) {
-          finishInterview();
-          return;
-        }
-        speak("Alright, let's move on.", () => {
-          generateNextQuestion({
-            question: pending.record.question,
-            answer: pending.record.answer,
-            evaluation: pending.feedback,
-            history: pending.history,
-            questionNumber: pending.record.questionNumber,
-            currentDifficulty: pending.currentDifficulty,
-          });
-        });
-      }, 800);
+      advanceToNextOrFinish(pending);
     });
-  }, [flowState, speak, finishInterview, generateNextQuestion]);
+  }, [flowState, speak, advanceToNextOrFinish]);
 
   const startInterview = async () => {
     setIsLoading(true);
@@ -374,6 +432,7 @@ const AIInterview = () => {
     if (isListening) stopListening();
     stop();
     setErrorState(null);
+    advancingRef.current = false;
     setFlowState(FLOW.ANSWER_SUBMITTED);
     setFlowState(FLOW.EVALUATING);
     setIsLoading(true);

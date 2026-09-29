@@ -1122,6 +1122,43 @@ def _resume_evidence_for_skill(resume_text: str, skill: str) -> str | None:
     return None
 
 
+def _extract_job_required_years(description: str) -> int:
+    """Extract candidate-required years of experience from a job description.
+
+    Ignores company background statements such as 'with 10 years of industry experience'
+    or 'company has 15 years of experience'.
+    """
+    desc = str(description or "").lower()
+    company_context = stdlib_re.compile(
+        r'(?:'
+        r'\b(?:with|celebrating|over|past|last|serving for|more than)\s+\d+\+?\s*years?\s+(?:of\s+)?(?:industry\s+|market\s+|corporate\s+|business\s+)?(?:experience|excellence|service|presence|history|heritage|in\s+business)'
+        r'|'
+        r'\b(?:we|our company|the company|our firm|the firm|our agency|the agency|our team|the team|business|organization)\s+(?:has|have)\s+(?:over\s+|more than\s+)?\d+\+?\s*years?\s+(?:of\s+)?(?:experience|excellence|service|presence|history)'
+        r'|'
+        r'\b\d+\+?\s*years?\s+(?:of\s+)?(?:industry\s+experience|excellence|service|in business|operating|in the market)'
+        r'|'
+        r'\b(?:founded|established|operating for|in business for)\s+(?:over\s+|more than\s+)?\d+\+?\s*years?'
+        r')',
+        stdlib_re.IGNORECASE,
+    )
+    cleaned = company_context.sub(" ", desc)
+    patterns = [
+        r'(?:minimum|min\.?|at least|require[sd]?|must have|should have|looking for)\s+(?:a minimum of\s+)?(\d+)\+?\s*(?:to\s*\d+\s*)?years?',
+        r'(\d+)\+?\s*(?:to\s*\d+\s*)?years?(?:\s+of)?\s+(?:[\w\s]{0,25})?experience\s+(?:is\s+)?(?:required|needed|mandatory|must|preferred)',
+        r'(?:experience\s*[:\-]\s*)(\d+)\+?\s*years?',
+        r'(?:required|requirements|qualifications)[\s\S]{0,100}?(\d+)\+?\s*years?',
+        r'(\d+)\+?\s*(?:to\s*\d+\s*)?years?(?:\s+of)?\s+(?:relevant\s+|work\s+|professional\s+|hands-on\s+|software\s+|engineering\s+|platform\s+)+experience',
+        r'(\d+)\+?\s*years?\s+experience\b',
+    ]
+    found_years = []
+    for pat in patterns:
+        for match in stdlib_re.finditer(pat, cleaned):
+            for g in match.groups():
+                if g:
+                    found_years.append(int(g))
+    return max(found_years) if found_years else 0
+
+
 def _deterministic_match_job(
     resume_text: str,
     job: dict,
@@ -1141,6 +1178,7 @@ def _deterministic_match_job(
         matched = [skill for skill in job_skills if skill in candidate_skills][:8]
     missing = [skill for skill in required if skill not in candidate_skills][:4]
 
+    # --- Role relevance ---
     role_words = set(stdlib_re.findall(r"[a-z][a-z0-9+#.]{2,}", title.lower()))
     role_sources = " ".join(
         [target_role, " ".join(_safe_str_list(profile.get("target_roles"))), resume_lower]
@@ -1149,40 +1187,70 @@ def _deterministic_match_job(
     role_overlap = len([word for word in role_words if word in role_sources])
     role_score = min(1.0, role_overlap / max(2, min(5, len(role_words)))) if role_words else 0.0
 
-    if required:
-        skill_score = len(matched) / len(required)
-    elif job_skills:
-        skill_score = len(set(matched)) / len(job_skills)
+    # --- Skill coverage with depth penalty ---
+    # A single-skill match (1/1) is NOT equivalent to a multi-skill match (5/5).
+    # Apply a coverage-depth factor so that matching 1 out of 1 required skill
+    # yields a lower effective score than matching 5 out of 5.
+    total_relevant = len(required) if required else len(job_skills)
+    matched_count = len(matched)
+    if total_relevant > 0:
+        raw_coverage = matched_count / total_relevant
     else:
-        skill_score = 0.0
+        raw_coverage = 0.0
+    # Depth factor: reward broader matches.  1 match -> 0.5, 2 -> 0.7, 3 -> 0.82,
+    # 4 -> 0.89, 5+ -> ~0.93+.  This means 1/1 match gives 0.5 * 1.0 = 0.5
+    # while 5/5 gives 0.93 * 1.0 = 0.93.
+    depth_factor = min(1.0, 1.0 - (0.5 / max(1, matched_count)))
+    skill_score = raw_coverage * depth_factor
 
+    # --- Experience level matching ---
     level = str(profile.get("experience_level", "junior")).lower()
     title_lower = title.lower()
     senior_title = any(term in title_lower for term in _SENIOR_TITLE_KEYWORDS)
-    years = [int(value) for value in stdlib_re.findall(r"(\d+)\+?\s*years?", description.lower())]
-    required_years = max(years) if years else 0
+    entry_signals = {"junior", "fresher", "intern", "trainee", "entry level",
+                     "entry-level", "graduate", "associate"}
+    is_entry_level_job = any(sig in title_lower or sig in description.lower()
+                            for sig in entry_signals)
+    required_years = _extract_job_required_years(description)
+
     if senior_title and level in {"fresher", "junior"}:
-        experience_match, experience_score = "Partial", 0.25
+        experience_match, experience_score = "Partial", 0.2
+    elif is_entry_level_job and level in {"fresher", "junior"} and required_years < 3:
+        # Explicit entry-level job matched with a fresher/junior candidate
+        experience_match, experience_score = "Strong", 1.0
     elif required_years >= 5 and level not in {"senior"}:
-        experience_match, experience_score = "Partial", 0.45
-    elif required_years and level == "fresher":
-        experience_match, experience_score = "Partial", 0.65
+        experience_match, experience_score = "Partial", 0.3
+    elif required_years >= 3 and level in {"fresher", "junior"}:
+        experience_match, experience_score = "Partial", 0.4
+    elif required_years >= 1 and level == "fresher":
+        experience_match, experience_score = "Partial", 0.55
+    elif level == "fresher" and not is_entry_level_job and not required_years:
+        # Job has no explicit experience info and candidate is a fresher
+        experience_match, experience_score = "Not specified", 0.6
+    elif level == "junior" and not required_years and not senior_title:
+        experience_match, experience_score = "Not specified", 0.7
     else:
         experience_match, experience_score = "Strong", 1.0
 
+    # --- Location ---
     job_location = str(job.get("location", "")).lower()
     location_lower = str(location or "").lower()
     location_score = 1.0 if (
         not location_lower or location_lower in job_location or
         job_location in location_lower or "india" in job_location
     ) else 0.35
+
+    # --- Final score ---
+    # Weights: skills 50, role 15, experience 25, location 10
+    # This gives experience a bigger impact and reduces title-word inflation.
     score = round(
         max(0.0, min(100.0,
-            skill_score * 45 + role_score * 25 +
-            experience_score * 20 + location_score * 10
+            skill_score * 50 + role_score * 15 +
+            experience_score * 25 + location_score * 10
         ))
     )
 
+    # --- Evidence ---
     evidence = []
     for skill in matched[:3]:
         snippet = _resume_evidence_for_skill(resume_text, skill)
@@ -1192,12 +1260,18 @@ def _deterministic_match_job(
         evidence = _meaningful_lines(
             sections_text if (sections_text := resume_text) else "", limit=1
         )
+
+    # --- Summary ---
     summary = (
-        f"Deterministic match based on {len(matched)} overlapping technical "
-        f"skill(s) and title relevance."
+        f"Deterministic match based on {matched_count} overlapping technical "
+        f"skill(s) out of {total_relevant} relevant."
     )
-    if experience_match != "Strong":
-        summary += " Experience or seniority requirements may need confirmation."
+    if experience_match == "Partial":
+        summary += " Experience or seniority requirements may not be met."
+    elif experience_match == "Not specified":
+        summary += " Job does not specify experience requirements."
+    if matched_count <= 1 and total_relevant > 0:
+        summary += f" Only {matched_count} skill overlap — limited evidence of fit."
 
     return {
         "job_id": str(job.get("id", "")),
@@ -2359,11 +2433,12 @@ SENIORITY vs TECHNICAL SKILLS (CRITICAL separation):
 - NEVER put in missing_skills: "years of experience", "senior-level", "professional experience",
   "leadership experience", "management experience", or any seniority phrasing.
 
-- experience_match rules (use EXACTLY one of these four values):
-    "Strong"  = the resume clearly demonstrates the relevant experience AND the job description provides compatible, specific requirements that are met.
-    "Partial" = some relevant experience is demonstrated, but important requirements are missing from the resume or unclear from the job description. USE THIS for a junior/fresher candidate with strong technical skills applying to a mid/senior role.
+- experience_match rules (use EXACTLY one of these values):
+    "Strong"  = skills matched AND experience level fits the job requirements.
+    "Partial" = skills match well BUT candidate lacks required experience/seniority. USE THIS for a junior/fresher candidate with strong technical skills applying to a mid/senior role or role requiring 3+ years.
     "Weak"    = significant TECHNICAL mismatch (not merely a seniority gap).
-    "Unknown" = the job description does not provide enough information to determine whether the experience requirement is met.
+    "Not specified" = the job description does not provide enough information to determine whether the experience requirement is met.
+- A fresher/junior candidate must NOT receive "Strong" for a role requiring 3+ years or carrying a senior/lead/principal title. Use "Partial" instead and explain in match_summary.
 - Do NOT assign "Strong" simply because the job title matches or the description is vague.
 - match_summary: 1-2 concise sentences distinguishing technical alignment from experience/seniority alignment.
   BAD: "Candidate lacks full-stack development." (wrong when resume shows React+Flask project)
@@ -2371,14 +2446,14 @@ SENIORITY vs TECHNICAL SKILLS (CRITICAL separation):
 - Do NOT write "Meets all the job requirements" unless EVERY important requirement is explicitly supported.
 - Do NOT include redirect_url in your response. The field will be populated by the server.
 
-MATCH SCORE GUIDELINES:
-90-100: Excellent technical alignment; experience requirements reasonably met.
-75-89:  Strong technical alignment; minor gaps or experience-level limitations.
-60-74:  Moderate alignment; several meaningful technical gaps.
-40-59:  Limited alignment; significant technical gaps.
-<40:    Poor alignment; fundamental skill mismatch.
-Do NOT give 70-80 merely because 2-3 technologies match — require substantive capability alignment.
-Do NOT lower the score merely because of fewer years if technical skill alignment is strong.
+SCORING RULES (follow strictly):
+  90-100: 4+ matched skills with evidence AND experience requirements met.
+  75-89:  3+ matched skills with evidence; minor gaps or slight seniority shortfall.
+  55-74:  2 matched skills OR moderate technical gaps OR significant seniority gap.
+  35-54:  1 matched skill only OR major technical gaps.
+  <35:    No meaningful skill overlap.
+A single overlapping skill must NOT produce a score above 54 regardless of title relevance.
+If the candidate is a fresher and the job requires 3+ years or has a senior title, cap the score at 74 even with strong technical alignment.
 
 Return ONLY this JSON (no markdown, no extra text):
 {{
@@ -2391,7 +2466,7 @@ Return ONLY this JSON (no markdown, no extra text):
       "match_score": <integer 0-100>,
       "matched_skills": ["<skill in both resume and job>"],
       "missing_skills": ["<skill required by job but absent from resume>"],
-      "experience_match": "<Strong | Partial | Weak | Unknown>",
+      "experience_match": "<Strong | Partial | Weak | Not specified>",
       "evidence": ["<direct resume reference supporting this match>"],
       "match_summary": "<1-2 sentence summary>"
     }}
@@ -3647,6 +3722,25 @@ experience unless the resume also shows the relevant work. Recognise equivalent
 wording only when the evidence supports it (for example REST/RESTful, SQL
 database work, or React frontend work). Treat frontend and backend in one
 project as full-stack evidence. Pandas alone is not data-analysis evidence.
+
+SCORING RULES (follow strictly):
+  90-100: 4+ matched skills with evidence AND experience requirements met.
+  75-89:  3+ matched skills with evidence; minor gaps or slight seniority shortfall.
+  55-74:  2 matched skills OR moderate technical gaps OR significant seniority gap.
+  35-54:  1 matched skill only OR major technical gaps.
+  <35:    No meaningful skill overlap.
+A single overlapping skill must NOT produce a score above 54 regardless of title
+relevance. If the candidate is a fresher and the job requires 3+ years or has a
+senior title, cap the score at 74 even with strong technical alignment.
+
+EXPERIENCE_MATCH RULES:
+  "Strong"  = skills matched AND experience level fits the job requirements.
+  "Partial" = skills match well BUT candidate lacks required experience/seniority.
+  "Weak"    = significant technical mismatch (not merely a seniority gap).
+  "Not specified" = job does not state experience requirements clearly.
+A fresher/junior candidate must NOT receive "Strong" for a role requiring 3+ years
+or carrying a senior/lead/principal title. Use "Partial" instead and explain in
+match_summary.
 
 missing_skills may contain only technical/domain capabilities explicitly required
 by that job and absent from the entire resume. Never put preferred, optional,
@@ -5206,7 +5300,7 @@ async def agent_run(
         match_prompt = _build_combined_recommend_prompt(
             resume_text, filtered, candidate_profile=profile
         )
-        match_result = call_ai_json(match_prompt, max_tokens=800)
+        match_result = call_ai_json(match_prompt, max_tokens=1200)
         if not isinstance(match_result, dict):
             raise ValueError("AI matching response was not a JSON object")
     except HTTPException as exc:
